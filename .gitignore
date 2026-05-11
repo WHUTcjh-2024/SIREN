@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project output
+output/
+output_combined/
+
+# Models / data
+*.pth
+*.pt
+*.onnx
+images/
+
+# Environment variables
+.env
+
+# EasyOCR model cache
+*.pth
+EasyOCR/

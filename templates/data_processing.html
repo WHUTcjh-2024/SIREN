@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据处理 · SIREN-PINNs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>window.MathJax={tex:{inlineMath:[['$','$']],displayMath:[['$$','$$']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre']}};</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+    <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace'],display:['Space Grotesk','Inter','sans-serif']},colors:{ocean:{50:'#F0F7FD',100:'#DCF0FA',200:'#B8E3F6',300:'#91D5F1',400:'#5FC3EC',500:'#33B0E5',600:'#1A8FCC',700:'#1570A0',800:'#105478',900:'#0A3952'},abyss:{50:'#E8ECF2',100:'#C5CFDC',200:'#9DADC4',300:'#6A80A0',400:'#4A6080',500:'#2E4565',600:'#1E3350',700:'#142740',800:'#0C1B32',900:'#061026'},ember:'#F59E0B',rose:'#EC4899',mint:'#10B981',violet:'#7C3AED'}}}}</script>
+    <style>
+        :root{--ocean:#91D5F1;--violet:#7C3AED;--ember:#F59E0B;--rose:#EC4899;--mint:#10B981}
+        *{scrollbar-width:thin;scrollbar-color:var(--ocean) transparent}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--ocean);border-radius:3px}
+        body{font-family:'Inter',system-ui,sans-serif;background:#F8FAFE;color:#1E293B}
+        .glass{background:rgba(255,255,255,.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(145,213,241,.18)}
+        .glass-heavy{background:rgba(255,255,255,.9);backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);border:1px solid rgba(145,213,241,.22);box-shadow:0 8px 32px rgba(145,213,241,.06)}
+        .gradient-cta{background:linear-gradient(135deg,#91D5F1,#6366F1,#7C3AED)}
+        .gradient-primary{background:linear-gradient(135deg,#91D5F1,#5FC3EC,#33B0E5,#6366F1);background-size:300% 300%;animation:gradientShift 8s ease infinite}
+        @keyframes gradientShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+        .text-gradient{background:linear-gradient(135deg,#1A8FCC,#6366F1,#7C3AED);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .card-premium{transition:all .4s cubic-bezier(.23,1,.32,1)}
+        .card-premium:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(12,27,50,.06),0 0 0 1px rgba(145,213,241,.25)}
+        .btn-cta{position:relative;overflow:hidden;transition:all .3s cubic-bezier(.23,1,.32,1)}
+        .btn-cta::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,255,255,.25),transparent);transform:translateX(-100%);transition:transform .6s}
+        .btn-cta:hover::before{transform:translateX(100%)}.btn-cta:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(99,102,241,.2)}
+        .fade-in{animation:fadeIn .5s ease forwards}@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        input[type="number"]{background:#F8FAFE;border:1.5px solid rgba(145,213,241,.25);border-radius:12px;padding:12px 16px;color:#1E293B;font-size:14px;transition:all .2s;font-family:'JetBrains Mono',monospace;width:100%}
+        input[type="number"]:focus{outline:none;border-color:#91D5F1;box-shadow:0 0 0 4px rgba(145,213,241,.12);background:white}
+        input[type="number"]::-webkit-inner-spin-button{opacity:.35}
+        input[type="number"]::placeholder{color:#9DADC4;font-family:'Inter',system-ui,sans-serif;font-size:13px;font-weight:400}
+        .formula-pill{transition:all .3s}.formula-pill:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(145,213,241,.12)}
+        .result-badge{font-feature-settings:"tnum";font-variant-numeric:tabular-nums}
+        .mjx-container{color:#1E293B!important}
+        .section-label{letter-spacing:.16em;font-size:12px;font-weight:700;text-transform:uppercase}
+        .input-label{font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;display:block}
+        .input-unit{font-weight:400;color:#64748B}
+        .result-value{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace}
+    </style>
+</head>
+<body class="min-h-screen">
+    <nav class="glass-heavy sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-ocean-300/40"><i class="fa fa-flask text-white text-lg"></i></div>
+                <div><span class="font-display font-bold text-lg text-abyss-800">SIREN-PINNs</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-ocean-100 text-ocean-600 font-semibold ml-2">v3.0</span></div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/" class="px-4 py-2.5 rounded-xl text-sm font-medium text-abyss-600 hover:bg-ocean-50 transition-all">首页</a>
+                <a href="/laser-diffraction" class="px-4 py-2.5 rounded-xl text-sm font-medium text-abyss-600 hover:bg-ocean-50 transition-all">图像采集</a>
+                <a href="/data-processing" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white gradient-cta shadow-lg">数据处理</a>
+            </div>
+            <button id="chat-nav-btn" class="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-cta text-white text-sm font-semibold btn-cta shadow-lg"><i class="fa fa-comments"></i><span class="hidden md:inline">AI 助手</span></button>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-8 py-8">
+        <div class="mb-10">
+            <span class="section-label text-violet">Data Processing</span>
+            <h1 class="text-3xl font-display font-extrabold text-gradient mt-2 mb-2">数据处理与计算</h1>
+            <p class="text-abyss-400 text-sm">表面张力系数计算 · 多组实验数据拟合分析</p>
+        </div>
+
+        <!-- Formula Showcase -->
+        <div class="glass rounded-2xl overflow-hidden mb-10">
+            <div class="px-6 py-4 border-b border-ocean-100 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-sm"><i class="fa fa-superscript text-white"></i></div>
+                <div>
+                    <span class="font-display font-bold text-base text-abyss-800">核心计算公式</span>
+                    <p class="text-xs text-abyss-400 mt-0.5">以下公式为表面张力计算的理论基础</p>
+                </div>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="formula-pill p-6 rounded-2xl border-2 border-ocean-100 bg-white">
+                    <div class="flex items-center gap-2.5 mb-4"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-ocean-400 to-ocean-500 flex items-center justify-center"><span class="text-white text-xs font-bold">1</span></div><span class="text-sm font-bold text-ocean-700">Kelvin 公式</span></div>
+                    <div class="text-center py-4 bg-ocean-50/60 rounded-xl mb-4">$$\sigma = \frac{\rho \omega^2}{k^3}$$</div>
+                    <p class="text-[12px] text-abyss-400 leading-relaxed">$\rho$ 液体密度，$\omega=2\pi f$ 角频率，$k$ 波数</p>
+                </div>
+                <div class="formula-pill p-6 rounded-2xl border-2 border-violet/15 bg-white">
+                    <div class="flex items-center gap-2.5 mb-4"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet to-purple-500 flex items-center justify-center"><span class="text-white text-xs font-bold">2</span></div><span class="text-sm font-bold text-violet">衍射角度</span></div>
+                    <div class="text-center py-4 bg-violet-50/50 rounded-xl mb-4">$$\alpha = \arctan\frac{H}{L},\quad \beta = \arctan\frac{\Delta x + H}{L},\quad \delta = \beta - \alpha$$</div>
+                    <p class="text-[12px] text-abyss-400 leading-relaxed">$H=H_0-h$ 零级光斑相对水面高度，$L$ 水平距离</p>
+                </div>
+                <div class="formula-pill p-6 rounded-2xl border-2 border-mint/15 bg-white">
+                    <div class="flex items-center gap-2.5 mb-4"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-mint to-emerald-400 flex items-center justify-center"><span class="text-white text-xs font-bold">3</span></div><span class="text-sm font-bold text-mint">波数计算</span></div>
+                    <div class="text-center py-4 bg-mint-50/50 rounded-xl mb-4">$$k = \frac{2\pi}{\lambda_0} \sin\frac{\delta}{2}\left[\sin\left(\alpha+\frac{\delta}{2}\right)+\sin\left(\alpha-\frac{\delta}{2}\right)\right]$$</div>
+                    <p class="text-[12px] text-abyss-400 leading-relaxed">$\lambda_0=632.8\,\text{nm}$ 氦氖激光波长</p>
+                </div>
+                <div class="formula-pill p-6 rounded-2xl border-2 border-rose/15 bg-white">
+                    <div class="flex items-center gap-2.5 mb-4"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-rose to-pink-400 flex items-center justify-center"><span class="text-white text-xs font-bold">4</span></div><span class="text-sm font-bold text-rose">相对误差</span></div>
+                    <div class="text-center py-4 bg-rose-50/50 rounded-xl mb-4">$$E = \frac{|\sigma - \sigma_0|}{\sigma_0} \times 100\%$$</div>
+                    <p class="text-[12px] text-abyss-400 leading-relaxed">$\sigma$ 实验值，$\sigma_0$ 标准值（选填）</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Surface Tension -->
+        <div class="glass rounded-2xl overflow-hidden mb-10">
+            <div class="px-6 py-4 border-b border-ocean-100 flex items-center gap-3" style="background:linear-gradient(135deg,rgba(145,213,241,.04),rgba(124,58,237,.02))">
+                <div class="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-sm"><i class="fa fa-calculator text-white"></i></div>
+                <div>
+                    <span class="font-display font-bold text-base text-abyss-800">表面张力系数计算</span>
+                    <p class="text-xs text-abyss-400 mt-0.5">填入单组实验测量参数，计算表面张力系数 σ</p>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
+                    <div><label class="input-label">激励频率 <span class="input-unit">f (Hz)</span></label><input type="number" id="f" step="0.1" min="0.1" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">条纹间距 <span class="input-unit">Δx (cm)</span></label><input type="number" id="deltaX" step="0.000001" min="0.000001" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">零级亮斑高度 <span class="input-unit">H₀ (cm)</span></label><input type="number" id="H0" step="0.1" min="0.1" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">水面高度 <span class="input-unit">h (cm)</span></label><input type="number" id="h" step="0.1" min="0.1" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">水平距离 <span class="input-unit">L (cm)</span></label><input type="number" id="L" step="0.1" min="0.1" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">液体密度 <span class="input-unit">ρ (kg/m³)</span></label><input type="number" id="rho" step="1" min="1" value="1000" placeholder="请输入实验数据"></div>
+                    <div class="md:col-span-2 lg:col-span-3">
+                        <label class="input-label">标准值 <span class="input-unit">σ₀ (N/m)</span><span class="text-abyss-300 font-normal ml-2">— 选填，用于计算误差</span></label>
+                        <input type="number" id="sigma0" step="0.0001" min="0.0001" placeholder="请输入标准值（选填）">
+                    </div>
+                </div>
+                <div class="text-center mb-6">
+                    <button id="calculateBtn" class="px-12 py-3.5 rounded-xl gradient-cta text-white font-bold text-[15px] btn-cta shadow-lg shadow-violet/15">
+                        <i class="fa fa-calculator mr-2"></i>计算表面张力
+                    </button>
+                </div>
+                <div id="calculateResults" class="hidden fade-in">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-ocean-600 mb-2">δ</div><div id="resultDelta" class="result-value text-abyss-700">--</div></div>
+                        <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-violet mb-2">k (m⁻¹)</div><div id="resultK" class="result-value text-abyss-700">--</div></div>
+                        <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-mint mb-2">σ (N/m)</div><div id="resultSigma" class="result-value text-abyss-800">--</div></div>
+                        <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-rose mb-2">相对误差</div><div id="resultError" class="result-value text-rose">--</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Fitting -->
+        <div class="glass rounded-2xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-ocean-100 flex items-center gap-3" style="background:linear-gradient(135deg,rgba(245,158,11,.03),rgba(145,213,241,.04))">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-ember to-orange-400 flex items-center justify-center shadow-sm"><i class="fa fa-line-chart text-white"></i></div>
+                <div>
+                    <span class="font-display font-bold text-base text-abyss-800">实验数据拟合</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-ember/10 text-ember font-semibold ml-2">$\omega = a k^{3/2}$</span>
+                    <p class="text-xs text-abyss-400 mt-0.5">输入多组 (k, f) 数据，拟合得到表面张力系数 σ</p>
+                </div>
+            </div>
+            <div class="p-6 pt-6">
+                <div class="mb-1 flex items-center gap-3 text-xs text-abyss-400 font-medium">
+                    <i class="fa fa-table text-ocean-400"></i>
+                    <span>实验数据表</span>
+                    <span class="text-abyss-300">— 每组包含波数 k 与激励频率 f</span>
+                </div>
+                <div class="space-y-3 my-4" id="dataInputs">
+                    <div class="flex gap-3 items-end">
+                        <div class="flex-1"><label class="input-label">波数 <span class="input-unit">k (m⁻¹)</span></label><input type="number" class="k-input" placeholder="请输入实验数据"></div>
+                        <div class="flex-1"><label class="input-label">频率 <span class="input-unit">f (Hz)</span></label><input type="number" class="f-input" placeholder="请输入实验数据"></div>
+                        <button type="button" class="remove-data-btn w-10 h-10 rounded-lg bg-rose-50 text-rose/60 hover:bg-rose-100 hover:text-rose flex items-center justify-center transition-colors flex-shrink-0 mb-0.5"><i class="fa fa-times text-xs"></i></button>
+                    </div>
+                    <div class="flex gap-3 items-end">
+                        <div class="flex-1"><label class="input-label">波数 <span class="input-unit">k (m⁻¹)</span></label><input type="number" class="k-input" placeholder="请输入实验数据"></div>
+                        <div class="flex-1"><label class="input-label">频率 <span class="input-unit">f (Hz)</span></label><input type="number" class="f-input" placeholder="请输入实验数据"></div>
+                        <button type="button" class="remove-data-btn w-10 h-10 rounded-lg bg-rose-50 text-rose/60 hover:bg-rose-100 hover:text-rose flex items-center justify-center transition-colors flex-shrink-0 mb-0.5"><i class="fa fa-times text-xs"></i></button>
+                    </div>
+                </div>
+                <button id="addDataBtn" class="mb-6 mt-2 px-5 py-2.5 rounded-xl bg-ocean-50 text-ocean-600 text-[13px] font-semibold hover:bg-ocean-100 transition-all border border-dashed border-ocean-200">
+                    <i class="fa fa-plus mr-2"></i>添加一行数据
+                </button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div><label class="input-label">液体密度 <span class="input-unit">ρ (kg/m³)</span></label><input type="number" id="fitRho" step="1" min="1" value="1000" placeholder="请输入实验数据"></div>
+                    <div><label class="input-label">标准值 <span class="input-unit">σ₀ (N/m)</span><span class="text-abyss-300 font-normal ml-2">— 选填</span></label><input type="number" id="fitSigma0" step="0.0001" min="0.0001" placeholder="请输入标准值（选填）"></div>
+                </div>
+                <div class="text-center mb-6">
+                    <button id="fitBtn" class="px-12 py-3.5 rounded-xl gradient-cta text-white font-bold text-[15px] btn-cta shadow-lg shadow-violet/15">
+                        <i class="fa fa-line-chart mr-2"></i>拟合数据
+                    </button>
+                </div>
+                <div id="fitResults" class="hidden fade-in">
+                    <div class="border-t-2 border-ocean-100 pt-6 mt-2">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-ocean-600 mb-2">拟合参数 a</div><div id="fitParamA" class="result-value text-abyss-700">--</div></div>
+                            <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-mint mb-2">σ (N/m)</div><div id="fitSigma" class="result-value text-abyss-800">--</div></div>
+                            <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-rose mb-2">相对误差</div><div id="fitError" class="result-value text-rose">--</div></div>
+                            <div class="glass rounded-xl p-5 card-premium"><div class="section-label text-ember mb-2">R²</div><div id="fitR2" class="result-value text-ember">--</div></div>
+                        </div>
+                    </div>
+                    <div class="glass rounded-2xl p-6 text-center">
+                        <div class="section-label text-ocean-500 mb-4">拟合曲线图</div>
+                        <div class="flex justify-center bg-white rounded-xl p-4"><img id="fitChart" src="" alt="拟合曲线" class="max-w-full max-h-80 object-contain rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-ocean-100/50 py-8 mt-14"><div class="max-w-7xl mx-auto px-8 flex justify-between"><div class="flex items-center gap-2"><div class="w-6 h-6 rounded-lg gradient-primary flex items-center justify-center"><i class="fa fa-flask text-white text-xs"></i></div><span class="text-xs text-abyss-400">SIREN-PINNs</span></div><span class="text-xs text-abyss-300">© 2026</span></div></footer>
+
+    <!-- AI Chat -->
+    <div id="chat-container" class="fixed bottom-6 right-6 z-50">
+        <div id="chat-expanded" class="hidden glass-heavy rounded-2xl shadow-2xl w-80 overflow-hidden" style="max-height:520px">
+            <div class="gradient-cta p-4 flex justify-between items-center">
+                <div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><i class="fa fa-robot text-white"></i></div><div><div class="text-white text-sm font-bold">AI 实验助手</div><div class="text-[10px] text-white/70">在线</div></div></div>
+                <button id="close-btn" class="text-white/60 hover:text-white p-1"><i class="fa fa-times"></i></button>
+            </div>
+            <div id="chat-messages" class="p-4 h-72 overflow-y-auto bg-abyss-50/30">
+                <div class="flex mb-4"><div class="w-7 h-7 rounded-full bg-ocean-100 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">你好！我是实验助手，有什么可以帮助你的吗？</div></div></div>
+            </div>
+            <div class="p-4 border-t border-ocean-50 bg-white">
+                <div class="flex gap-2"><input type="text" id="chat-input" class="flex-1 bg-ocean-50/50 border border-ocean-100 rounded-xl px-4 py-2.5 text-sm text-abyss-800 placeholder-abyss-300 focus:outline-none focus:border-ocean-300" placeholder="输入问题..."><button id="send-btn" class="gradient-cta text-white rounded-xl w-10 h-10 flex items-center justify-center shadow-md"><i class="fa fa-paper-plane text-sm"></i></button></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        const dataInputs=document.getElementById('dataInputs');
+        const addDataBtn=document.getElementById('addDataBtn');
+
+        function makeRowHTML(){
+            return`<div class="flex gap-3 items-end"><div class="flex-1"><label class="input-label">波数 <span class="input-unit">k (m\u207B\u00B9)</span></label><input type="number" class="k-input" placeholder="请输入实验数据"></div><div class="flex-1"><label class="input-label">频率 <span class="input-unit">f (Hz)</span></label><input type="number" class="f-input" placeholder="请输入实验数据"></div><button type="button" class="remove-data-btn w-10 h-10 rounded-lg bg-rose-50 text-rose/60 hover:bg-rose-100 hover:text-rose flex items-center justify-center transition-colors flex-shrink-0 mb-0.5"><i class="fa fa-times text-xs"></i></button></div>`
+        }
+
+        addDataBtn.addEventListener('click',function(){
+            const d=document.createElement('div');
+            d.innerHTML=makeRowHTML();
+            const row=d.firstElementChild;
+            dataInputs.appendChild(row);
+            row.querySelector('.remove-data-btn').addEventListener('click',function(){
+                const rows=dataInputs.querySelectorAll('.flex.gap-3');
+                if(rows.length>1)row.remove()
+            })
+        });
+
+        document.querySelectorAll('.remove-data-btn').forEach(b=>{
+            b.addEventListener('click',function(){
+                const rows=dataInputs.querySelectorAll('.flex.gap-3');
+                if(rows.length>1)this.closest('.flex.gap-3').remove()
+            })
+        });
+
+        document.getElementById('calculateBtn').addEventListener('click',function(){
+            var f=parseFloat(document.getElementById('f').value),
+                dX=parseFloat(document.getElementById('deltaX').value),
+                H0=parseFloat(document.getElementById('H0').value),
+                h=parseFloat(document.getElementById('h').value),
+                L=parseFloat(document.getElementById('L').value),
+                rho=parseFloat(document.getElementById('rho').value),
+                s0=document.getElementById('sigma0').value?parseFloat(document.getElementById('sigma0').value):null;
+            if(!(f&&dX&&!isNaN(H0)&&!isNaN(h)&&L&&rho)){alert('请填写所有必填参数');return}
+            fetch('/api/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({f:f,delta_X_cm:dX,H0:H0,h:h,L:L,rho:rho,sigma0:s0})})
+            .then(function(r){return r.json()})
+            .then(function(d){
+                if(d.success){
+                    document.getElementById('resultDelta').textContent=d.data.delta;
+                    document.getElementById('resultK').textContent=d.data.k;
+                    document.getElementById('resultSigma').textContent=d.data.sigma;
+                    document.getElementById('resultError').textContent=d.data.relative_error?d.data.relative_error+'%':'--';
+                    document.getElementById('calculateResults').classList.remove('hidden')
+                }else{alert('计算错误: '+d.message)}
+            }).catch(function(){alert('网络错误，请重试')})
+        });
+
+        document.getElementById('fitBtn').addEventListener('click',function(){
+            var kI=document.querySelectorAll('.k-input'),fI=document.querySelectorAll('.f-input'),
+                rho=parseFloat(document.getElementById('fitRho').value),
+                s0=document.getElementById('fitSigma0').value?parseFloat(document.getElementById('fitSigma0').value):null;
+            var ed=[];
+            for(var i=0;i<kI.length;i++){
+                var k=parseFloat(kI[i].value),f=parseFloat(fI[i].value);
+                if(k&&f)ed.push({k:k,f:f})
+            }
+            if(ed.length<2){alert('至少需要2组有效数据');return}
+            fetch('/api/fit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({experiment_data:ed,rho:rho,sigma0:s0})})
+            .then(function(r){return r.json()})
+            .then(function(d){
+                if(d.success){
+                    document.getElementById('fitParamA').textContent=d.data.a;
+                    document.getElementById('fitSigma').textContent=d.data.sigma_fit;
+                    document.getElementById('fitError').textContent=d.data.relative_error_fit?d.data.relative_error_fit+'%':'--';
+                    document.getElementById('fitR2').textContent=d.data.r_squared;
+                    document.getElementById('fitChart').src='data:image/png;base64,'+d.data.img_base64;
+                    document.getElementById('fitResults').classList.remove('hidden')
+                }else{alert('拟合错误: '+d.message)}
+            }).catch(function(){alert('网络错误，请重试')})
+        });
+    })();
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded',function(){
+        var chatNavBtn=document.getElementById('chat-nav-btn'),chatExp=document.getElementById('chat-expanded'),
+            closeBtn=document.getElementById('close-btn'),chatMsgs=document.getElementById('chat-messages'),
+            chatIn=document.getElementById('chat-input'),sendBtn=document.getElementById('send-btn');
+        if(!chatNavBtn)return;
+        chatNavBtn.addEventListener('click',function(){chatExp.classList.toggle('hidden')});
+        closeBtn.addEventListener('click',function(){chatExp.classList.add('hidden')});
+        function sendMsg(){
+            var q=chatIn.value.trim();if(!q)return;
+            addMsg('user',q);chatIn.value='';
+            var lid=addMsg('assistant','<div class="flex gap-1.5"><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div>');
+            fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})})
+            .then(function(r){return r.json()})
+            .then(function(d){document.getElementById(lid).remove();addMsg('assistant',d.answer)})
+            .catch(function(){document.getElementById(lid).remove();addMsg('assistant','网络错误，请重试。')})
+        }
+        function addMsg(role,html){
+            var id='m'+Date.now(),div=document.createElement('div');div.id=id;
+            if(role==='user'){div.className='flex justify-end mb-4';div.innerHTML='<div class="max-w-[80%]"><div class="gradient-cta rounded-2xl rounded-tr-sm p-3.5 text-white text-xs shadow-lg">'+html+'</div></div>'}
+            else{div.className='flex mb-4';div.innerHTML='<div class="w-7 h-7 rounded-full bg-ocean-100 flex-shrink-0 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">'+html+'</div></div>'}
+            chatMsgs.appendChild(div);chatMsgs.scrollTop=chatMsgs.scrollHeight;return id
+        }
+        sendBtn.addEventListener('click',sendMsg);
+        chatIn.addEventListener('keypress',function(e){if(e.key==='Enter')sendMsg()});
+    });
+    </script>
+</body>
+</html>

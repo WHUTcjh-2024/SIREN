@@ -1,0 +1,469 @@
+"""
+数据加载模块
+功能：
+1. 使用 OpenCV 加载图像并转化为 Tensor
+2. 自动剪切条纹区域与标尺区域
+3. 图像预处理（灰度化、归一化）
+"""
+
+import cv2
+import numpy as np
+import torch
+from typing import Tuple, Dict
+
+
+class DiffractionDataLoader:
+    """衍射图像数据加载器"""
+    
+    def __init__(self, image_path: str):
+        """
+        初始化数据加载器
+        
+        Args:
+            image_path: 输入图像路径
+        """
+        self.image_path = image_path
+        self.original_image = None
+        self.gray_image = None
+        self.diffraction_region = None
+        self.ruler_region = None
+        self.image_tensor = None
+        
+    def load_image(self) -> np.ndarray:
+        """
+        加载图像
+        
+        Returns:
+            加载的原始图像 (BGR 格式)
+        """
+        self.original_image = cv2.imread(self.image_path)
+        if self.original_image is None:
+            try:
+                data = np.fromfile(self.image_path, dtype=np.uint8)
+                self.original_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            except Exception:
+                self.original_image = None
+        if self.original_image is None:
+            raise FileNotFoundError(f"无法加载图像：{self.image_path}")
+        return self.original_image
+    
+    def convert_to_gray(self, method: str = 'mean') -> np.ndarray:
+        """
+        转换为灰度图
+        
+        Args:
+            method: 转换方法，'mean' 或 'weighted'
+            
+        Returns:
+            灰度图像
+        """
+        if self.original_image is None:
+            self.load_image()
+        
+        if method == 'weighted':
+            # 使用加权平均：0.299R + 0.587G + 0.114B
+            self.gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+        else:
+            # 简单平均
+            self.gray_image = np.mean(self.original_image, axis=2).astype(np.uint8)
+        
+        return self.gray_image
+    
+    def normalize_image(self, image: np.ndarray = None) -> torch.Tensor:
+        """
+        图像归一化到 [0, 1] 范围并转换为 Tensor
+        
+        Args:
+            image: 输入图像
+            
+        Returns:
+            归一化后的 Tensor
+        """
+        if image is None:
+            if self.gray_image is None:
+                self.convert_to_gray()
+            image = self.gray_image
+        
+        # Min-Max 归一化
+        img_min = np.min(image)
+        img_max = np.max(image)
+        normalized = (image.astype(np.float32) - img_min) / (img_max - img_min + 1e-8)
+        
+        # 转换为 Tensor (C, H, W)
+        self.image_tensor = torch.from_numpy(normalized).unsqueeze(0).float()
+        return self.image_tensor
+    
+    def auto_crop_regions(self, diffraction_y_range: Tuple[int, int] = None,
+                         ruler_x_range: Tuple[int, int] = None) -> Dict[str, np.ndarray]:
+        """
+        自动剪切条纹区域和标尺区域
+        
+        Args:
+            diffraction_y_range: 衍射条纹区域的 y 范围 (y_min, y_max)
+            ruler_x_range: 标尺区域的 x 范围 (x_min, x_max)
+            
+        Returns:
+            包含剪切区域的字典
+        """
+        if self.gray_image is None:
+            self.convert_to_gray()
+        
+        height, width = self.gray_image.shape
+        
+        # 如果没有指定范围，使用自动检测
+        if diffraction_y_range is None:
+            # 自动检测衍射条纹区域（基于垂直投影）
+            vertical_projection = np.sum(self.gray_image, axis=1)
+            # 找到信号最强的区域
+            threshold = 0.5 * np.max(vertical_projection)
+            signal_indices = np.where(vertical_projection > threshold)[0]
+            if len(signal_indices) > 0:
+                y_min = max(0, signal_indices[0] - 10)
+                y_max = min(height, signal_indices[-1] + 10)
+            else:
+                y_min, y_max = height // 3, 2 * height // 3
+        
+        if ruler_x_range is None:
+            # 自动检测标尺区域（通常在右侧）
+            x_min = int(width * 0.8)
+            x_max = width
+        
+        self.diffraction_region = self.gray_image
+        
+        self.ruler_region = self.gray_image[:, x_min:x_max]
+        
+        return {
+            'diffraction': self.diffraction_region,
+            'ruler': self.ruler_region,
+            'full': self.gray_image
+        }
+    
+    def extract_horizontal_profile(self, image: np.ndarray = None,
+                                   y_center: int = None) -> np.ndarray:
+        """
+        提取光强分布剖面（自动检测条纹方向）
+
+        关键改进：根据实际图像内容自动判断是垂直还是水平条纹
+        对于垂直条纹（如本项目的激光衍射图像），提取垂直方向剖面
+
+        Args:
+            image: 输入图像
+            y_center: 提取剖面的 y 坐标（已废弃，保留兼容性）
+
+        Returns:
+            光强分布（1D数组）
+        """
+        if image is None:
+            if self.diffraction_region is None:
+                self.auto_crop_regions()
+            image = self.diffraction_region
+
+        height, width = image.shape
+
+        # 检测条纹方向：比较水平和垂直方向的峰值数量
+        # 更可靠的检测方法：找峰值而不是比较方差
+        from scipy.signal import find_peaks as fp
+        from scipy.ndimage import gaussian_filter1d as gf
+
+        # 计算投影
+        horizontal_proj = np.mean(image, axis=0)  # 水平投影（每列平均）
+        vertical_proj = np.mean(image, axis=1)     # 垂直投影（每行平均）
+
+        # 平滑处理
+        h_smooth = gf(horizontal_proj, sigma=3)
+        v_smooth = gf(vertical_proj, sigma=3)
+
+        # 找峰值
+        h_peaks, _ = fp(h_smooth, distance=width//20, prominence=np.std(h_smooth)*0.5)
+        v_peaks, _ = fp(v_smooth, distance=height//20, prominence=np.std(v_smooth)*0.5)
+
+        print(f"[调试] 方向检测 - 水平投影峰值数:{len(h_peaks)}, 垂直投影峰值数:{len(v_peaks)}")
+        print(f"[调试] 图像尺寸: {height} x {width}")
+
+        # 对于激光衍射图像（垂直条纹）：
+        # - 垂直投影会有3个明显的峰（中央+正负一级）
+        # - 水平投影可能只有1个峰或噪声
+        if len(v_peaks) >= 3:
+            print(f"[DEBUG] Detected {len(v_peaks)} vertical peaks, using vertical profile")
+            return self._extract_vertical_profile(image)
+        elif len(h_peaks) >= 3:
+            print(f"[DEBUG] Detected {len(h_peaks)} horizontal peaks, using horizontal profile")
+            return self._extract_horizontal_classic(image)
+        else:
+            # 兜底方案：比较标准差
+            h_std = np.std(h_smooth)
+            v_std = np.std(v_smooth)
+            print(f"[DEBUG] Peaks < 3, using std dev: H_std={h_std:.2f}, V_std={v_std:.2f}")
+
+            if v_std > h_std * 1.1:
+                print("[DEBUG] Vertical std larger, using vertical profile")
+                return self._extract_vertical_profile(image)
+            else:
+                print("[DEBUG] Using classic horizontal profile")
+                return self._extract_horizontal_classic(image)
+
+    def _extract_vertical_profile(self, image: np.ndarray) -> np.ndarray:
+        """
+        提取垂直方向的光强分布（适用于垂直条纹）
+
+        Args:
+            image: 输入灰度图像
+
+        Returns:
+            垂直方向的光强分布（1D数组）
+        """
+        height, width = image.shape
+
+        # 找中心位置（最亮的 x 列），排除最右侧 20% 避免标尺干扰
+        search_width = max(width * 3 // 4, 1)
+        vertical_proj = np.sum(image[:, :int(search_width)], axis=0)
+        center_x = np.argmax(vertical_proj)
+
+        # 取中心附近多列的平均以增强信噪比
+        window = min(80, width // 5)
+        x_start = max(0, center_x - window)
+        x_end = min(width, center_x + window)
+
+        print(f"[DEBUG] Vertical profile - center_x={center_x}, x_range=[{x_start}, {x_end}], search_width={int(search_width)}")
+
+        # 计算平均剖面（沿垂直方向）
+        strip = image[:, x_start:x_end]
+        profile = np.mean(strip, axis=1).astype(np.float32)
+
+        print(f"[DEBUG] Raw profile length: {len(profile)}")
+
+        # 平滑
+        from scipy.ndimage import gaussian_filter1d
+        profile = cv2.GaussianBlur(profile.reshape(-1, 1), (1, 11), 0).flatten()
+
+        # 尝试找 3 个峰并裁剪到局部区域
+        from scipy.signal import find_peaks
+
+        smoothed = gaussian_filter1d(profile, sigma=4)
+        peaks, properties = find_peaks(smoothed, distance=max(30, height//30),
+                                        prominence=max(2, np.std(smoothed) * 0.2))
+
+        print(f"[DEBUG] Detected {len(peaks)} candidate peaks in vertical profile")
+
+        if len(peaks) >= 3:
+            peak_heights = smoothed[peaks]
+            top_3_idx = np.argsort(peak_heights)[-3:][::-1]
+            top_3_peaks = sorted(peaks[top_3_idx])
+
+            print(f"[DEBUG] Top-3 peak positions (image Y): {top_3_peaks}")
+            print(f"[DEBUG] Top-3 peak intensities: {[f'{smoothed[p]:.1f}' for p in top_3_peaks]}")
+
+            dx1 = top_3_peaks[1] - top_3_peaks[0]
+            dx2 = top_3_peaks[2] - top_3_peaks[1]
+            margin = int(max(dx1, dx2) * 0.8)
+            margin = max(margin, 50)
+
+            y_start = max(0, top_3_peaks[0] - margin)
+            y_end = min(height, top_3_peaks[2] + margin)
+
+            profile = profile[y_start:y_end]
+
+            self.profile_crop_info = {
+                'direction': 'vertical',
+                'y_start': y_start,
+                'y_end': y_end,
+                'peak_positions': [p - y_start for p in top_3_peaks],
+                'original_height': height,
+                'original_peak_positions': top_3_peaks,
+                'peak_intensities': [smoothed[p] for p in top_3_peaks]
+            }
+
+            print(f"[DEBUG] Cropped to [{y_start}, {y_end}], final length: {len(profile)}")
+        elif len(peaks) >= 2:
+            peak_heights = smoothed[peaks]
+            top_2_idx = np.argsort(peak_heights)[-2:][::-1]
+            top_2_peaks = sorted(peaks[top_2_idx])
+            margin = int((top_2_peaks[1] - top_2_peaks[0]) * 1.2)
+            margin = max(margin, 100)
+            y_start = max(0, top_2_peaks[0] - margin)
+            y_end = min(height, top_2_peaks[1] + margin)
+            profile = profile[y_start:y_end]
+
+            self.profile_crop_info = {
+                'direction': 'vertical',
+                'y_start': y_start,
+                'y_end': y_end,
+                'peak_positions': [p - y_start for p in top_2_peaks],
+                'original_height': height,
+                'original_peak_positions': top_2_peaks,
+                'peak_intensities': [smoothed[p] for p in top_2_peaks]
+            }
+            print(f"[DEBUG] Only {len(peaks)} peaks found, cropped to [{y_start},{y_end}]")
+        else:
+            print(f"[DEBUG] Less than 2 peaks found, returning full profile")
+            self.profile_crop_info = None
+
+        return profile
+
+    def _extract_horizontal_classic(self, image: np.ndarray) -> np.ndarray:
+        """
+        经典的水平剖面提取（适用于水平条纹）
+
+        Args:
+            image: 输入灰度图像
+
+        Returns:
+            水平方向的光强分布（1D数组）
+        """
+        height, width = image.shape
+
+        # 找到中心位置（最亮的 y 行）
+        horizontal_proj = np.sum(image, axis=1)
+        center_y = np.argmax(horizontal_proj)
+
+        # 取中心附近多行的平均以增强信噪比
+        window = min(100, height // 4)
+        y_start = max(0, center_y - window)
+        y_end = min(height, center_y + window)
+
+        # 计算平均剖面
+        profile = np.mean(image[y_start:y_end, :], axis=0).astype(np.float32)
+
+        # 平滑
+        profile = cv2.GaussianBlur(profile.reshape(1, -1), (15, 1), 0).flatten()
+
+        # 尝试找 3 个峰并裁剪到局部区域
+        from scipy.signal import find_peaks
+        from scipy.ndimage import gaussian_filter1d
+
+        smoothed = gaussian_filter1d(profile, 5)
+        peaks, _ = find_peaks(smoothed, distance=100, prominence=5)
+
+        if len(peaks) >= 3:
+            # 找最强的 3 个峰
+            peak_heights = smoothed[peaks]
+            top_3_idx = np.argsort(peak_heights)[-3:][::-1]
+            top_3_peaks = sorted(peaks[top_3_idx])
+
+            # 计算间距和裁剪范围
+            dx1 = top_3_peaks[1] - top_3_peaks[0]
+            dx2 = top_3_peaks[2] - top_3_peaks[1]
+            margin = max(dx1, dx2) * 0.7
+
+            x_start = max(0, int(top_3_peaks[0] - margin))
+            x_end = min(width, int(top_3_peaks[2] + margin))
+
+            # 裁剪到局部区域
+            profile = profile[x_start:x_end]
+
+            # 保存裁剪信息供后续使用
+            self.profile_crop_info = {
+                'direction': 'horizontal',
+                'x_start': x_start,
+                'x_end': x_end,
+                'peak_positions': [p - x_start for p in top_3_peaks],
+                'original_width': width
+            }
+
+        return profile
+    
+    def get_coordinates(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        获取像素坐标（用于后续物理坐标转换）
+
+        Returns:
+            (坐标数组, 坐标数组) - 根据剖面方向返回对应的坐标
+        """
+        if self.diffraction_region is None:
+            self.auto_crop_regions()
+
+        # 如果有裁剪信息，使用裁剪后的范围
+        if hasattr(self, 'profile_crop_info') and self.profile_crop_info:
+            direction = self.profile_crop_info.get('direction', 'horizontal')
+
+            if direction == 'vertical':
+                # 垂直剖面：返回y坐标
+                y_start = self.profile_crop_info['y_start']
+                y_end = self.profile_crop_info['y_end']
+                coords = np.arange(y_end - y_start) + y_start  # 保持原始坐标
+            else:
+                # 水平剖面：返回x坐标
+                x_start = self.profile_crop_info['x_start']
+                x_end = self.profile_crop_info['x_end']
+                coords = np.arange(x_end - x_start) + x_start  # 保持原始坐标
+        else:
+            # 无裁剪信息，使用完整范围
+            height, width = self.diffraction_region.shape
+            # 默认使用宽度（水平方向）
+            coords = np.arange(width)
+
+        # 返回两个相同的数组（兼容性）
+        return coords, coords
+    
+    def process(self) -> Dict:
+        """
+        完整的图像处理流程
+        
+        Returns:
+            包含所有处理结果的字典
+        """
+        # 1. 加载图像
+        self.load_image()
+        
+        # 2. 转换为灰度图
+        self.convert_to_gray()
+        
+        # 3. 归一化
+        self.normalize_image()
+        
+        # 4. 自动剪切区域
+        regions = self.auto_crop_regions()
+        
+        # 5. 提取水平剖面
+        profile = self.extract_horizontal_profile()
+        
+        # 6. 获取坐标
+        x_coords, y_coords = self.get_coordinates()
+        
+        return {
+            'original': self.original_image,
+            'gray': self.gray_image,
+            'tensor': self.image_tensor,
+            'regions': regions,
+            'profile': profile,
+            'x_coords': x_coords,
+            'y_coords': y_coords,
+            'diffraction_region': self.diffraction_region,
+            'ruler_region': self.ruler_region
+        }
+
+
+def load_and_process_image(image_path: str, return_loader: bool = False):
+    """
+    便捷函数：加载并处理衍射图像
+    
+    Args:
+        image_path: 图像路径
+        return_loader: 是否同时返回loader实例
+        
+    Returns:
+        处理结果字典，或者 (字典, loader) 元组
+    """
+    loader = DiffractionDataLoader(image_path)
+    result = loader.process()
+    if return_loader:
+        return result, loader
+    return result
+
+
+if __name__ == "__main__":
+    # 测试代码
+    import sys
+    
+    if len(sys.argv) > 1:
+        image_path = sys.argv[1]
+    else:
+        print("请提供图像路径")
+        sys.exit(1)
+    
+    result = load_and_process_image(image_path)
+    print(f"图像加载成功：{result['original'].shape}")
+    print(f"灰度图：{result['gray'].shape}")
+    print(f"衍射区域：{result['diffraction_region'].shape}")
+    print(f"标尺区域：{result['ruler_region'].shape}")
+    print(f"光强剖面：{result['profile'].shape}")

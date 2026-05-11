@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIREN-PINNs · 高精度激光衍射测量系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace'],display:['Space Grotesk','Inter','sans-serif']},colors:{ocean:{50:'#F0F7FD',100:'#DCF0FA',200:'#B8E3F6',300:'#91D5F1',400:'#5FC3EC',500:'#33B0E5',600:'#1A8FCC',700:'#1570A0',800:'#105478',900:'#0A3952'},abyss:{50:'#E8ECF2',100:'#C5CFDC',200:'#9DADC4',300:'#6A80A0',400:'#4A6080',500:'#2E4565',600:'#1E3350',700:'#142740',800:'#0C1B32',900:'#061026'},ember:'#F59E0B',rose:'#EC4899',mint:'#10B981',violet:'#7C3AED'}}}}</script>
+    <style>
+        :root{--ocean:#91D5F1;--ocean-d:#5FC3EC;--abyss:#0C1B32;--ember:#F59E0B;--rose:#EC4899;--mint:#10B981;--violet:#7C3AED}
+        *{scrollbar-width:thin;scrollbar-color:var(--ocean) transparent}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--ocean);border-radius:3px}
+        body{font-family:'Inter',system-ui,sans-serif;background:#F8FAFE;color:#1E293B;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+        .gradient-primary{background:linear-gradient(135deg,#91D5F1,#5FC3EC,#33B0E5,#6366F1);background-size:300% 300%;animation:gradientShift 8s ease infinite}
+        .gradient-cta{background:linear-gradient(135deg,#91D5F1,#6366F1,#7C3AED)}
+        .gradient-hero{background:linear-gradient(170deg,#F0F7FD 0%,#E8F3FC 20%,#FFFFFF 50%,#FAFCFE 80%,#F0F7FD 100%)}
+        .text-gradient{background:linear-gradient(135deg,#1A8FCC,#6366F1,#7C3AED);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .text-gradient-warm{background:linear-gradient(135deg,#F59E0B,#EC4899,#7C3AED);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        @keyframes gradientShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+        .glass-nav{background:rgba(255,255,255,.88);backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);border-bottom:1px solid rgba(145,213,241,.15)}
+        .card-elevated{background:white;border:1px solid rgba(145,213,241,.15);border-radius:20px;transition:all .4s cubic-bezier(.23,1,.32,1)}
+        .card-elevated:hover{transform:translateY(-8px);box-shadow:0 28px 56px rgba(12,27,50,.06),0 0 0 1px rgba(145,213,241,.35)}
+
+        .btn-primary{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#91D5F1,#6366F1,#7C3AED);color:white;padding:16px 36px;border-radius:16px;font-size:16px;font-weight:600;position:relative;overflow:hidden;transition:all .35s cubic-bezier(.23,1,.32,1);box-shadow:0 8px 28px rgba(99,102,241,.18)}
+        .btn-primary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,255,255,.25),transparent);transform:translateX(-100%);transition:transform .5s}
+        .btn-primary:hover::before{transform:translateX(100%)}
+        .btn-primary:hover{transform:translateY(-3px);box-shadow:0 16px 40px rgba(99,102,241,.28)}
+        .btn-secondary{display:inline-flex;align-items:center;gap:10px;background:white;color:#1E3350;padding:16px 36px;border-radius:16px;font-size:16px;font-weight:600;border:1.5px solid rgba(145,213,241,.2);transition:all .35s cubic-bezier(.23,1,.32,1)}
+        .btn-secondary:hover{border-color:#91D5F1;transform:translateY(-3px);box-shadow:0 12px 32px rgba(145,213,241,.15)}
+
+        .hero-blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.35;pointer-events:none}
+        @keyframes drift1{0%,100%{transform:translate(0,0)}33%{transform:translate(30px,-20px)}66%{transform:translate(-15px,15px)}}
+        @keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-25px,-10px)}}
+
+        .section-dark{background:linear-gradient(175deg,#0C1B32,#142740,#0A1628);color:#E2E8F0}
+        .grid-pattern{background-image:radial-gradient(rgba(145,213,241,.12) 1px,transparent 1px);background-size:28px 28px}
+
+        .fade-up{opacity:0;transform:translateY(40px);transition:all .8s cubic-bezier(.23,1,.32,1)}
+        .fade-up.visible{opacity:1;transform:translateY(0)}
+    </style>
+</head>
+<body>
+    <!-- Ambient background blobs -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div class="hero-blob w-[700px] h-[700px] top-[-12%] left-[-6%]" style="background:radial-gradient(circle,rgba(145,213,241,.45),transparent 72%);animation:drift1 14s ease-in-out infinite"></div>
+        <div class="hero-blob w-[550px] h-[550px] top-[35%] right-[-6%]" style="background:radial-gradient(circle,rgba(99,102,241,.3),transparent 72%);animation:drift2 12s ease-in-out infinite 3s"></div>
+        <div class="hero-blob w-[400px] h-[400px] bottom-[5%] left-[25%]" style="background:radial-gradient(circle,rgba(236,72,153,.15),transparent 72%);animation:drift1 16s ease-in-out infinite 5s"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="glass-nav sticky top-0 z-50">
+        <div class="max-w-[1280px] mx-auto px-8 h-[68px] flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3.5 group">
+                <div class="w-[42px] h-[42px] rounded-[14px] gradient-primary flex items-center justify-center shadow-lg shadow-ocean-300/30 group-hover:scale-105 transition-transform duration-300">
+                    <i class="fa fa-flask text-white text-lg"></i>
+                </div>
+                <div class="flex flex-col">
+                    <span class="font-display font-bold text-[17px] text-abyss-800 tracking-tight leading-none">SIREN-PINNs</span>
+                    <span class="text-[10px] text-ocean-600 font-semibold">v3.0 · 高精度测量</span>
+                </div>
+            </a>
+            <div class="flex items-center gap-1.5">
+                <a href="/" class="px-5 py-2.5 rounded-xl text-[14px] font-semibold text-white gradient-cta shadow-md">首页</a>
+                <a href="/laser-diffraction" class="px-5 py-2.5 rounded-xl text-[14px] font-medium text-abyss-500 hover:text-abyss-800 hover:bg-ocean-50/80 transition-all">图像采集</a>
+                <a href="/data-processing" class="px-5 py-2.5 rounded-xl text-[14px] font-medium text-abyss-500 hover:text-abyss-800 hover:bg-ocean-50/80 transition-all">数据处理</a>
+            </div>
+            <button id="chat-nav-btn" class="btn-primary !py-2.5 !px-5 !text-[14px] !gap-2 !shadow-lg !rounded-xl">
+                <i class="fa fa-comments text-sm"></i><span class="hidden md:inline">AI 助手</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ═══════════ HERO ═══════════ -->
+    <section class="gradient-hero relative overflow-hidden">
+        <div class="absolute inset-0 grid-pattern opacity-25"></div>
+        <div class="max-w-[1280px] mx-auto px-8 pt-36 pb-44 text-center relative z-10">
+            <div class="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full border border-ocean-200 bg-white/70 backdrop-blur-sm mb-12 fade-up">
+                <span class="relative flex h-2 h-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-70"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-ocean-500"></span></span>
+                <span class="text-[13px] font-semibold text-ocean-700 tracking-wide">SIREN 神经隐式场 · PINNs 物理约束 · 亚像素级测量</span>
+            </div>
+
+            <h1 style="color: #2561c1" class="text-[56px] md:text-[80px] font-display font-extrabold text-gradient leading-[1.05] tracking-[-0.02em] mb-10 fade-up">
+                高精度<br>激光衍射测量系统
+            </h1>
+
+            <p class="text-[17px] md:text-[19px] text-abyss-400/80 mb-16 max-w-[640px] mx-auto leading-relaxed fade-up">
+                融合深度神经网络与物理信息约束，将传统光学实验精度
+                <br class="hidden md:block">提升至亚像素级别，为科研提供可靠的数据支撑
+            </p>
+
+            <div class="flex flex-col sm:flex-row justify-center gap-4 fade-up">
+                <a href="/laser-diffraction" class="btn-primary group">
+                    <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-400 flex-shrink-0">
+                        <i class="fa fa-lightbulb-o text-white"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-semibold">图像采集</div>
+                        <div class="text-[13px] text-white/65 font-normal">拍摄衍射图 · 提取光强分布</div>
+                    </div>
+                    <i class="fa fa-arrow-right text-white/40 group-hover:translate-x-1 transition-transform duration-400 ml-2"></i>
+                </a>
+                <a href="/data-processing" class="btn-secondary group">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-ocean-50 to-violet-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-400 flex-shrink-0">
+                        <i class="fa fa-calculator text-ocean-500"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-semibold">数据处理</div>
+                        <div class="text-[13px] text-abyss-400 font-normal">计算表面张力 · 数据拟合</div>
+                    </div>
+                    <i class="fa fa-arrow-right text-ocean-300 group-hover:translate-x-1 transition-transform duration-400 ml-2"></i>
+                </a>
+            </div>
+        </div>
+        <!-- Wave -->
+        <div class="absolute bottom-0 left-0 w-full overflow-hidden leading-none">
+            <svg viewBox="0 0 1440 100" preserveAspectRatio="none" class="w-full h-[60px] md:h-[90px]"><path d="M0 100V50C180 20 360 5 540 25C780 50 960 80 1140 50C1320 20 1380 30 1440 45V100H0Z" fill="white"/></svg>
+        </div>
+    </section>
+
+    <!-- ═══════════ STATS ═══════════ -->
+    <section class="relative z-10 -mt-12 mb-28">
+        <div class="max-w-[1080px] mx-auto px-8">
+            <div class="card-elevated !rounded-3xl p-10 grid grid-cols-1 md:grid-cols-3 gap-0 fade-up">
+                <div class="flex items-center gap-5 px-6 py-3 md:border-r border-ocean-100/60">
+                    <div class="w-12 h-12 rounded-2xl bg-ocean-50 flex items-center justify-center flex-shrink-0">
+                        <i class="fa fa-crosshairs text-ocean-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-[32px] font-display font-bold text-gradient leading-none tracking-tight">&lt; 0.01 px</div>
+                        <div class="text-[13px] text-abyss-400 mt-1.5 font-medium">亚像素级定位精度</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-5 px-6 py-3 md:border-r border-ocean-100/60">
+                    <div class="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center flex-shrink-0">
+                        <i class="fa fa-video-camera text-violet text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-[32px] font-display font-bold text-gradient-warm leading-none tracking-tight">4K</div>
+                        <div class="text-[13px] text-abyss-400 mt-1.5 font-medium">超高清图像采集</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-5 px-6 py-3">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                        <i class="fa fa-cube text-ember text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-[32px] font-display font-bold text-gradient leading-none tracking-tight">3D</div>
+                        <div class="text-[13px] text-abyss-400 mt-1.5 font-medium">交互式可视化</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════ FEATURES ═══════════ -->
+    <section class="max-w-[1280px] mx-auto px-8 pb-36">
+        <div class="text-center mb-20 fade-up">
+            <span class="text-[11px] font-bold text-violet uppercase tracking-[.25em]">Core Capabilities</span>
+            <h2 class="text-[40px] md:text-[52px] font-display font-extrabold text-gradient mt-3 mb-5 leading-[1.15]">核心能力矩阵</h2>
+            <p class="text-[15px] text-abyss-400 max-w-[520px] mx-auto leading-relaxed">从图像采集到物理量计算的全栈解决方案，<br class="hidden md:block">赋能科研级精密测量</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Card 1 -->
+            <div class="card-elevated p-10 group fade-up">
+                <div class="flex items-start gap-6">
+                    <div class="w-[56px] h-[56px] rounded-2xl bg-gradient-to-br from-ocean-100 to-ocean-200 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm">
+                        <i class="fa fa-lightbulb-o text-ocean-500 text-[22px]"></i>
+                    </div>
+                    <div class="flex-1 pt-1">
+                        <h3 class="font-display font-bold text-[20px] text-abyss-800 mb-3">激光衍射分析</h3>
+                        <p class="text-[14px] text-abyss-400/80 leading-relaxed max-w-[420px]">上传衍射图像，SIREN 网络自动提取光强分布，实现亚像素级条纹间距精确定位。</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Card 2 -->
+            <div class="card-elevated p-10 group fade-up">
+                <div class="flex items-start gap-6">
+                    <div class="w-[56px] h-[56px] rounded-2xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm">
+                        <i class="fa fa-calculator text-violet text-[22px]"></i>
+                    </div>
+                    <div class="flex-1 pt-1">
+                        <h3 class="font-display font-bold text-[20px] text-abyss-800 mb-3">物理约束计算</h3>
+                        <p class="text-[14px] text-abyss-400/80 leading-relaxed max-w-[420px]">PINNs 物理信息神经网络深度约束，确保计算结果严格符合波动方程与衍射理论。</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Card 3 -->
+            <div class="card-elevated p-10 group fade-up">
+                <div class="flex items-start gap-6">
+                    <div class="w-[56px] h-[56px] rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm">
+                        <i class="fa fa-cube text-ember text-[22px]"></i>
+                    </div>
+                    <div class="flex-1 pt-1">
+                        <h3 class="font-display font-bold text-[20px] text-abyss-800 mb-3">3D 可视化</h3>
+                        <p class="text-[14px] text-abyss-400/80 leading-relaxed max-w-[420px]">交互式 3D 表面图，实时调节参数观察衍射光强的空间分布形态。</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Card 4 -->
+            <div class="card-elevated p-10 group fade-up">
+                <div class="flex items-start gap-6">
+                    <div class="w-[56px] h-[56px] rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm">
+                        <i class="fa fa-file-text text-rose text-[22px]"></i>
+                    </div>
+                    <div class="flex-1 pt-1">
+                        <h3 class="font-display font-bold text-[20px] text-abyss-800 mb-3">数据导出</h3>
+                        <p class="text-[14px] text-abyss-400/80 leading-relaxed max-w-[420px]">支持多格式导出实验数据与图表，方便后续分析报告撰写与成果发表。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════ WORKFLOW ═══════════ -->
+    <section class="section-dark py-32 relative overflow-hidden">
+        <div class="absolute inset-0 grid-pattern opacity-8"></div>
+        <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-ocean-400/30 to-transparent"></div>
+        <div class="max-w-[1280px] mx-auto px-8 relative z-10">
+            <div class="flex flex-col lg:flex-row items-start gap-20">
+                <div class="flex-1 fade-up">
+                    <span class="text-[11px] font-bold text-ocean-400 uppercase tracking-[.25em]">Precision Workflow</span>
+                    <h2 class="text-[40px] md:text-[52px] font-display font-extrabold text-white mt-4 mb-14 leading-[1.15]">精密工作流</h2>
+
+                    <div class="space-y-1">
+                        <div class="flex items-start gap-6 py-6 group cursor-default">
+                            <div class="relative">
+                                <div class="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-ocean-400 to-ocean-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-ocean-500/25 group-hover:scale-110 transition-transform duration-300">
+                                    <span class="text-white font-bold text-lg">1</span>
+                                </div>
+                                <div class="absolute top-[52px] left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-ocean-400/40 to-transparent"></div>
+                            </div>
+                            <div class="pt-2">
+                                <h4 class="font-display font-bold text-white text-[18px] mb-2">图像采集</h4>
+                                <p class="text-[14px] text-gray-400 leading-relaxed">4K 摄像头拍摄或上传衍射图像，自动识别并裁剪光斑区域。</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-6 py-6 group cursor-default">
+                            <div class="relative">
+                                <div class="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-violet-500/25 group-hover:scale-110 transition-transform duration-300">
+                                    <span class="text-white font-bold text-lg">2</span>
+                                </div>
+                                <div class="absolute top-[52px] left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-violet-400/40 to-transparent"></div>
+                            </div>
+                            <div class="pt-2">
+                                <h4 class="font-display font-bold text-white text-[18px] mb-2">SIREN 拟合</h4>
+                                <p class="text-[14px] text-gray-400 leading-relaxed">神经隐式场精确拟合光强分布曲线，实现连续可微的数学表示。</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-6 py-6 group cursor-default">
+                            <div class="relative">
+                                <div class="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-ember to-orange-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/25 group-hover:scale-110 transition-transform duration-300">
+                                    <span class="text-white font-bold text-lg">3</span>
+                                </div>
+                                <div class="absolute top-[52px] left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-ember/40 to-transparent"></div>
+                            </div>
+                            <div class="pt-2">
+                                <h4 class="font-display font-bold text-white text-[18px] mb-2">Newton 寻峰</h4>
+                                <p class="text-[14px] text-gray-400 leading-relaxed">迭代法亚像素级精确定位衍射峰，精度达到 0.01 像素量级。</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-6 py-6 group cursor-default">
+                            <div class="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-mint to-emerald-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/25 group-hover:scale-110 transition-transform duration-300">
+                                <span class="text-white font-bold text-lg">4</span>
+                            </div>
+                            <div class="pt-2">
+                                <h4 class="font-display font-bold text-white text-[18px] mb-2">物理计算</h4>
+                                <p class="text-[14px] text-gray-400 leading-relaxed">PINNs 约束下计算表面张力系数，确保结果严格符合物理一致性。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 fade-up lg:pt-16">
+                    <div class="rounded-3xl p-10 border border-white/8" style="background:rgba(20,39,64,.55);backdrop-filter:blur(20px)">
+                        <div class="text-center text-ocean-300 text-[11px] font-bold uppercase tracking-[.25em] mb-8">核心方程</div>
+                        <div class="space-y-3.5 font-mono">
+                            <div class="flex items-center gap-4 p-5 rounded-2xl border border-white/5" style="background:rgba(12,27,50,.5)">
+                                <span class="text-ocean-400 font-bold text-xl flex-shrink-0 w-8">σ</span><span class="text-white/30">=</span><span class="text-white font-semibold tracking-wide text-[14px]">ρω² / k³</span><span class="text-[11px] text-white/25 ml-auto flex-shrink-0">Kelvin</span>
+                            </div>
+                            <div class="flex items-center gap-4 p-5 rounded-2xl border border-white/5" style="background:rgba(12,27,50,.5)">
+                                <span class="text-rose font-bold text-xl flex-shrink-0 w-8">δ</span><span class="text-white/30">=</span><span class="text-white font-semibold tracking-wide text-[14px]">β − α</span><span class="text-[11px] text-white/25 ml-auto flex-shrink-0">衍射角差</span>
+                            </div>
+                            <div class="flex items-center gap-4 p-5 rounded-2xl border border-white/5" style="background:rgba(12,27,50,.5)">
+                                <span class="text-ember font-bold text-xl flex-shrink-0 w-8">k</span><span class="text-white/30">=</span><span class="text-white font-semibold tracking-wide text-[13px]">(2π/λ₀)·sin(δ/2)·[sin(α+δ/2)+sin(α−δ/2)]</span>
+                            </div>
+                            <div class="flex items-center gap-4 p-5 rounded-2xl border border-white/5" style="background:rgba(12,27,50,.5)">
+                                <span class="text-violet font-bold text-xl flex-shrink-0 w-8">E</span><span class="text-white/30">=</span><span class="text-white font-semibold tracking-wide text-[14px]">|σ−σ₀|/σ₀ × 100%</span><span class="text-[11px] text-white/25 ml-auto flex-shrink-0">相对误差</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════ FOOTER ═══════════ -->
+    <footer class="border-t border-ocean-100/50 py-10">
+        <div class="max-w-[1280px] mx-auto px-8 flex flex-col md:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-7 h-7 rounded-lg gradient-primary flex items-center justify-center"><i class="fa fa-flask text-white text-xs"></i></div>
+                <span class="text-[13px] text-abyss-400 font-medium">SIREN-PINNs 高精度测量系统</span>
+            </div>
+            <span class="text-[13px] text-abyss-300">© 2026 · All Rights Reserved</span>
+        </div>
+    </footer>
+
+    <!-- ═══════════ AI CHAT ═══════════ -->
+    <div id="chat-container" class="fixed bottom-6 right-6 z-50">
+        <div id="chat-expanded" class="hidden bg-white rounded-2xl shadow-2xl w-80 overflow-hidden border border-ocean-100/30" style="max-height:520px">
+            <div class="gradient-cta p-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><i class="fa fa-robot text-white"></i></div>
+                    <div><div class="text-white text-sm font-bold">AI 实验助手</div><div class="text-[10px] text-white/70">在线</div></div>
+                </div>
+                <button id="close-btn" class="text-white/60 hover:text-white p-1"><i class="fa fa-times"></i></button>
+            </div>
+            <div id="chat-messages" class="p-4 h-72 overflow-y-auto bg-abyss-50/30">
+                <div class="flex mb-4"><div class="w-7 h-7 rounded-full bg-ocean-100 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">你好！我是实验助手，有什么可以帮助你的吗？</div></div></div>
+            </div>
+            <div class="p-4 border-t border-ocean-50 bg-white"><div class="flex gap-2"><input type="text" id="chat-input" class="flex-1 bg-ocean-50/50 border border-ocean-100 rounded-xl px-4 py-2.5 text-sm text-abyss-800 placeholder-abyss-300 focus:outline-none focus:border-ocean-300" placeholder="输入问题..."><button id="send-btn" class="gradient-cta text-white rounded-xl w-10 h-10 flex items-center justify-center shadow-md"><i class="fa fa-paper-plane text-sm"></i></button></div></div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded',function(){
+        var chatNavBtn=document.getElementById('chat-nav-btn'),chatExp=document.getElementById('chat-expanded'),closeBtn=document.getElementById('close-btn'),chatMsgs=document.getElementById('chat-messages'),chatIn=document.getElementById('chat-input'),sendBtn=document.getElementById('send-btn');
+        if(chatNavBtn)chatNavBtn.addEventListener('click',function(){chatExp.classList.toggle('hidden')});
+        if(closeBtn)closeBtn.addEventListener('click',function(){chatExp.classList.add('hidden')});
+        function sendMsg(){var q=chatIn.value.trim();if(!q)return;addMsg('user',q);chatIn.value='';var lid=addMsg('assistant','<div class="flex gap-1.5"><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div>');fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})}).then(function(r){return r.json()}).then(function(d){document.getElementById(lid).remove();addMsg('assistant',d.answer)}).catch(function(){document.getElementById(lid).remove();addMsg('assistant','网络错误，请重试。')})}
+        function addMsg(role,html){var id='m'+Date.now(),div=document.createElement('div');div.id=id;if(role==='user'){div.className='flex justify-end mb-4';div.innerHTML='<div class="max-w-[80%]"><div class="gradient-cta rounded-2xl rounded-tr-sm p-3.5 text-white text-xs shadow-lg">'+html+'</div></div>'}else{div.className='flex mb-4';div.innerHTML='<div class="w-7 h-7 rounded-full bg-ocean-100 flex-shrink-0 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">'+html+'</div></div>'}chatMsgs.appendChild(div);chatMsgs.scrollTop=chatMsgs.scrollHeight;return id}
+        sendBtn.addEventListener('click',sendMsg);chatIn.addEventListener('keypress',function(e){if(e.key==='Enter')sendMsg()});
+
+        var observer=new IntersectionObserver(function(e){e.forEach(function(e){if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}})},{threshold:0.12});
+        document.querySelectorAll('.fade-up').forEach(function(el){observer.observe(el)});
+    });
+    </script>
+</body>
+</html>
