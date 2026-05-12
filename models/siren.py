@@ -1,6 +1,5 @@
 """
-SIREN 神经隐式表示模块 (v3 - 单头)
-基于 Sinusoidal Representation Network 拟合衍射条纹的连续光强分布
+SIREN 神经隐式表示模块
 """
 
 import torch

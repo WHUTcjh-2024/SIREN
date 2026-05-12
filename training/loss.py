@@ -1,8 +1,3 @@
-"""
-训练模块 (v10 - MSE + PINN物理约束)
-PINN约束: 光滑性正则化 + 对称性约束
-"""
-
 import torch
 import torch.nn as nn
 import torch.optim as optim

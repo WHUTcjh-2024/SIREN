@@ -1,9 +1,3 @@
-"""
-Flask 后端：激光衍射自动测量系统
-集成 DiffractionAnalysisPipeline + 修正峰值检测 + 刻度尺 OCR
-与 test_combined.py 保持一致的分析逻辑
-"""
-
 import os
 import cv2
 import json

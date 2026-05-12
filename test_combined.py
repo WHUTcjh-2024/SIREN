@@ -1,7 +1,3 @@
-"""
-Combined analysis test script: ruler mapping + SIREN subpixel peak refinement + horizontal profile extraction
-"""
-
 import os
 import sys
 import glob

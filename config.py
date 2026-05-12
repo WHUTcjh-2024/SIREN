@@ -1,13 +1,3 @@
-"""
-全局配置文件 (v10 — SIREN + PINNs + OCR主刻度 + 亚像素标尺处理)
-核心改进:
-  - SIREN + PINNs 高精度定位中央条纹、正负一级条纹 (4位小数)
-  - OCR只检测10cm/20cm/30cm主刻度
-  - 亚像素处理10cm-30cm刻度尺区域
-  - 结合条纹像素位置与刻度尺数据计算 delta_x1, delta_x2
-  - 水平线截取刻度尺推算 H0
-"""
-
 SIREN_CONFIG = {
     'input_dim': 1,
     'hidden_dim': 256,

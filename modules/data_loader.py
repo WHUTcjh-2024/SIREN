@@ -1,11 +1,3 @@
-"""
-数据加载模块
-功能：
-1. 使用 OpenCV 加载图像并转化为 Tensor
-2. 自动剪切条纹区域与标尺区域
-3. 图像预处理（灰度化、归一化）
-"""
-
 import cv2
 import numpy as np
 import torch
@@ -16,12 +8,6 @@ class DiffractionDataLoader:
     """衍射图像数据加载器"""
     
     def __init__(self, image_path: str):
-        """
-        初始化数据加载器
-        
-        Args:
-            image_path: 输入图像路径
-        """
         self.image_path = image_path
         self.original_image = None
         self.gray_image = None
@@ -30,12 +16,7 @@ class DiffractionDataLoader:
         self.image_tensor = None
         
     def load_image(self) -> np.ndarray:
-        """
-        加载图像
-        
-        Returns:
-            加载的原始图像 (BGR 格式)
-        """
+
         self.original_image = cv2.imread(self.image_path)
         if self.original_image is None:
             try:
@@ -48,15 +29,6 @@ class DiffractionDataLoader:
         return self.original_image
     
     def convert_to_gray(self, method: str = 'mean') -> np.ndarray:
-        """
-        转换为灰度图
-        
-        Args:
-            method: 转换方法，'mean' 或 'weighted'
-            
-        Returns:
-            灰度图像
-        """
         if self.original_image is None:
             self.load_image()
         
@@ -70,15 +42,6 @@ class DiffractionDataLoader:
         return self.gray_image
     
     def normalize_image(self, image: np.ndarray = None) -> torch.Tensor:
-        """
-        图像归一化到 [0, 1] 范围并转换为 Tensor
-        
-        Args:
-            image: 输入图像
-            
-        Returns:
-            归一化后的 Tensor
-        """
         if image is None:
             if self.gray_image is None:
                 self.convert_to_gray()
@@ -95,16 +58,6 @@ class DiffractionDataLoader:
     
     def auto_crop_regions(self, diffraction_y_range: Tuple[int, int] = None,
                          ruler_x_range: Tuple[int, int] = None) -> Dict[str, np.ndarray]:
-        """
-        自动剪切条纹区域和标尺区域
-        
-        Args:
-            diffraction_y_range: 衍射条纹区域的 y 范围 (y_min, y_max)
-            ruler_x_range: 标尺区域的 x 范围 (x_min, x_max)
-            
-        Returns:
-            包含剪切区域的字典
-        """
         if self.gray_image is None:
             self.convert_to_gray()
         
@@ -124,7 +77,6 @@ class DiffractionDataLoader:
                 y_min, y_max = height // 3, 2 * height // 3
         
         if ruler_x_range is None:
-            # 自动检测标尺区域（通常在右侧）
             x_min = int(width * 0.8)
             x_max = width
         
@@ -140,34 +92,18 @@ class DiffractionDataLoader:
     
     def extract_horizontal_profile(self, image: np.ndarray = None,
                                    y_center: int = None) -> np.ndarray:
-        """
-        提取光强分布剖面（自动检测条纹方向）
-
-        关键改进：根据实际图像内容自动判断是垂直还是水平条纹
-        对于垂直条纹（如本项目的激光衍射图像），提取垂直方向剖面
-
-        Args:
-            image: 输入图像
-            y_center: 提取剖面的 y 坐标（已废弃，保留兼容性）
-
-        Returns:
-            光强分布（1D数组）
-        """
         if image is None:
             if self.diffraction_region is None:
                 self.auto_crop_regions()
             image = self.diffraction_region
 
         height, width = image.shape
-
-        # 检测条纹方向：比较水平和垂直方向的峰值数量
-        # 更可靠的检测方法：找峰值而不是比较方差
         from scipy.signal import find_peaks as fp
         from scipy.ndimage import gaussian_filter1d as gf
 
         # 计算投影
-        horizontal_proj = np.mean(image, axis=0)  # 水平投影（每列平均）
-        vertical_proj = np.mean(image, axis=1)     # 垂直投影（每行平均）
+        horizontal_proj = np.mean(image, axis=0)  
+        vertical_proj = np.mean(image, axis=1)     
 
         # 平滑处理
         h_smooth = gf(horizontal_proj, sigma=3)
@@ -179,10 +115,6 @@ class DiffractionDataLoader:
 
         print(f"[调试] 方向检测 - 水平投影峰值数:{len(h_peaks)}, 垂直投影峰值数:{len(v_peaks)}")
         print(f"[调试] 图像尺寸: {height} x {width}")
-
-        # 对于激光衍射图像（垂直条纹）：
-        # - 垂直投影会有3个明显的峰（中央+正负一级）
-        # - 水平投影可能只有1个峰或噪声
         if len(v_peaks) >= 3:
             print(f"[DEBUG] Detected {len(v_peaks)} vertical peaks, using vertical profile")
             return self._extract_vertical_profile(image)

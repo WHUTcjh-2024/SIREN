@@ -1,21 +1,3 @@
-"""
-Laser Diffraction Fringe Spacing Measurement System (v10 - SIREN + PINNs + EasyOCR Ruler)
-CLI: python main.py <image_path>
-Gradio: python qianduan.py
-
-Pipeline:
-  1. Grayscale image
-  2. EasyOCR ruler detection (10/20/30cm marks)
-  3. 1D intensity profile extraction
-  4. Bright peak detection (center + ±1 order) with sub-pixel centroid refinement
-  5. Ruler linear mapping (cm = slope * px + intercept)
-  6. H0 calculation (center peak height in cm)
-  7. Delta x1/x2 in both px and cm
-  8. SIREN + PINN fitting
-  9. Newton-Raphson sub-pixel peak refinement
-  10. Single combined visualization image
-"""
-
 import os
 import cv2
 import sys
