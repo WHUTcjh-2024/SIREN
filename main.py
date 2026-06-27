@@ -99,12 +99,18 @@ class DiffractionMeasurementSystem:
         profile_raw[profile_raw < 0] = 0
 
         smoothed = gf1d(profile_raw, sigma=0.5)
-        all_peaks, props = find_peaks(smoothed, distance=15, prominence=2)
+        peak_dist = max(8, len(profile_raw) // 25)
+        prom_base = max(0.5, float(smoothed.max() - smoothed.min()) * 0.02)
+        all_peaks, props = find_peaks(smoothed, distance=peak_dist, prominence=prom_base)
 
         if len(all_peaks) < 3:
-            all_peaks, props = find_peaks(smoothed, distance=15, prominence=1)
+            all_peaks, props = find_peaks(
+                smoothed, distance=max(5, peak_dist // 2), prominence=prom_base * 0.5
+            )
         if len(all_peaks) < 3:
-            all_peaks, props = find_peaks(smoothed, distance=15, prominence=0.5)
+            all_peaks, props = find_peaks(
+                smoothed, distance=max(3, peak_dist // 3), prominence=prom_base * 0.25
+            )
 
         if len(all_peaks) < 3:
             raise RuntimeError(

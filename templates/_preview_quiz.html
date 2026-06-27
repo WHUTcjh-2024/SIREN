@@ -1,0 +1,95 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/preview_quiz.css') }}?v=2">
+
+<div class="preview-quiz-wrap" id="preview-quiz-module">
+    <div class="preview-quiz-card">
+        <div class="preview-quiz-header" role="button" tabindex="0" aria-expanded="true" aria-controls="preview-quiz-body">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-sm flex-shrink-0">
+                    <i class="fa fa-book text-white text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                    <span class="font-display font-bold text-base text-abyss-800 block">预习测验答卷</span>
+                    <p class="text-xs text-abyss-400 mt-0.5 truncate">实验前测验 · 全部答对后进入正式实验</p>
+                </div>
+            </div>
+            <span class="preview-quiz-toggle" aria-hidden="true"><i class="fa fa-chevron-down"></i></span>
+        </div>
+
+        <div class="preview-quiz-body" id="preview-quiz-body">
+            <form class="preview-quiz-form" novalidate>
+                <div class="preview-quiz-section">
+                    <div class="preview-quiz-section-title"><i class="fa fa-dot-circle-o"></i> 单项选择题</div>
+
+                    <div class="preview-quiz-item" data-quiz-type="single" data-name="pq-s1" data-answer="B">
+                        <p class="preview-quiz-q"><span class="preview-quiz-q-num">1.</span>同等实验环境下，99% 无水乙醇相比纯水，所需最佳振动频率（ ）</p>
+                        <div class="preview-quiz-options">
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s1" value="A"> A. 更低</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s1" value="B"> B. 更高</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s1" value="C"> C. 完全相同</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s1" value="D"> D. 无规律</label>
+                        </div>
+                    </div>
+
+                    <div class="preview-quiz-item" data-quiz-type="single" data-name="pq-s2" data-answer="A">
+                        <p class="preview-quiz-q"><span class="preview-quiz-q-num">2.</span>由光栅衍射公式可知，毛细波波长越小，衍射条纹间距（ ）</p>
+                        <div class="preview-quiz-options">
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s2" value="A"> A. 越大</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s2" value="B"> B. 越小</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s2" value="C"> C. 不变</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s2" value="D"> D. 先大后小</label>
+                        </div>
+                    </div>
+
+                    <div class="preview-quiz-item" data-quiz-type="single" data-name="pq-s3" data-answer="B">
+                        <p class="preview-quiz-q"><span class="preview-quiz-q-num">3.</span>频率过高时液面波纹过密，会出现什么现象（ ）</p>
+                        <div class="preview-quiz-options">
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s3" value="A"> A. 条纹清晰散开</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s3" value="B"> B. 条纹拥挤难以分辨</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s3" value="C"> C. 条纹消失</label>
+                            <label class="preview-quiz-option"><input type="radio" name="pq-s3" value="D"> D. 条纹反向排列</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-quiz-section">
+                    <div class="preview-quiz-section-title"><i class="fa fa-check-square-o"></i> 多项选择题</div>
+
+                    <div class="preview-quiz-item" data-quiz-type="multiple" data-name="pq-m1" data-answer="A,B,C">
+                        <p class="preview-quiz-q"><span class="preview-quiz-q-num">1.</span>下列关于衍射条纹说法正确的有（ ）</p>
+                        <div class="preview-quiz-options">
+                            <label class="preview-quiz-option"><input type="checkbox" name="pq-m1" value="A"> A. 零级主极大亮度最高</label>
+                            <label class="preview-quiz-option"><input type="checkbox" name="pq-m1" value="B"> B. 衍射级次越高亮度越弱</label>
+                            <label class="preview-quiz-option"><input type="checkbox" name="pq-m1" value="C"> C. 条纹均匀分布代表波纹规整</label>
+                            <label class="preview-quiz-option"><input type="checkbox" name="pq-m1" value="D"> D. 条纹粘连说明频率合适</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-quiz-section">
+                    <div class="preview-quiz-section-title"><i class="fa fa-gavel"></i> 判断题</div>
+
+                    <div class="preview-quiz-item" data-quiz-type="tf" data-name="pq-t1" data-answer="false">
+                        <p class="preview-quiz-q"><span class="preview-quiz-q-num">1.</span>表面张力越大的液体，所需最佳工作振动频率普遍越高。</p>
+                        <div class="preview-quiz-tf">
+                            <label><input type="radio" name="pq-t1" value="true"> 正确 √</label>
+                            <label><input type="radio" name="pq-t1" value="false"> 错误 ×</label>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="preview-quiz-hint"><i class="fa fa-info-circle mr-1"></i>须独立完成作答并「提交自检」全部正确，方可进入实验系统。</p>
+
+                <div class="preview-quiz-actions">
+                    <button type="button" class="preview-quiz-btn preview-quiz-btn-primary" data-action="check">
+                        <i class="fa fa-check"></i> 提交自检
+                    </button>
+                    <button type="button" class="preview-quiz-btn preview-quiz-btn-secondary" data-action="reset">
+                        <i class="fa fa-refresh"></i> 重新作答
+                    </button>
+                </div>
+                <div class="preview-quiz-summary" role="status" aria-live="polite"></div>
+            </form>
+        </div>
+    </div>
+</div>
+

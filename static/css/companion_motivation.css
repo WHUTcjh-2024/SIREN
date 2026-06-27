@@ -1,0 +1,32 @@
+/* ============================================================
+   companion_motivation.css — 智慧星学习激励与情感陪伴
+   ============================================================ */
+
+/* companion notification toast */
+.companion-toast{
+  position:fixed;bottom:180px;right:24px;z-index:997;
+  max-width:320px;padding:14px 18px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--border);
+  box-shadow:0 8px 32px rgba(0,0,0,.1);
+  font-size:13px;color:var(--text);line-height:1.5;
+  display:flex;align-items:flex-start;gap:10px;
+  animation:companionSlideIn .4s cubic-bezier(.23,1,.32,1);
+}
+.companion-toast.hide{animation:companionSlideOut .3s ease forwards}
+@keyframes companionSlideIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes companionSlideOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(16px)}}
+
+.companion-toast-icon{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:14px;
+}
+.companion-toast-body{flex:1;min-width:0}
+.companion-toast-title{font-weight:700;font-size:12px;margin-bottom:2px}
+.companion-toast-text{font-size:12px;color:var(--text-secondary)}
+.companion-toast-close{
+  width:20px;height:20px;border-radius:6px;border:none;
+  background:transparent;color:var(--text-muted);font-size:12px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.companion-toast-close:hover{background:#f1f5f9;color:var(--text)}

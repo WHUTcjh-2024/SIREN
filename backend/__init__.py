@@ -1,0 +1,1 @@
+"""SIREN FastAPI backend."""

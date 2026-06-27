@@ -1,41 +1,15 @@
-# Python
+.env
+.venv/
+venv/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environment
-venv/
-.venv/
-env/
-
-# IDE
-.vscode/
+.pytest_cache/
+.coverage
+htmlcov/
 .idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project output
+.vscode/
+frontend/node_modules/
+frontend/dist/
 output/
-output_combined/
-
-# Models / data
-*.pth
-*.pt
-*.onnx
-images/
-
-# Environment variables
-.env
-
-# EasyOCR model cache
-*.pth
-EasyOCR/
+data/experiment_sessions/
+*.log

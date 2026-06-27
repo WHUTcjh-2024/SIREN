@@ -1,0 +1,11 @@
+services:
+  siren:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
+      - ./data/experiment_sessions:/app/data/experiment_sessions
+    restart: unless-stopped

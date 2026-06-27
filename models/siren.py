@@ -44,7 +44,11 @@ class NeuralImplicitField(nn.Module):
             self.layers.append(SIRENLayer(hidden_dim, hidden_dim, freq_0))
 
         self.head = nn.Linear(hidden_dim, 1)
-        nn.init.zeros_(self.head.weight)
+        # A zero output layer blocks gradients to every preceding SIREN layer
+        # on the first optimisation step. Use the paper's small final-layer
+        # initialisation so all layers can learn from step one.
+        bound = np.sqrt(6.0 / hidden_dim) / freq_0
+        nn.init.uniform_(self.head.weight, -bound, bound)
         nn.init.zeros_(self.head.bias)
 
     def forward(self, y: torch.Tensor) -> torch.Tensor:

@@ -1,19 +1,21 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图像采集 · SIREN-PINNs</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace'],display:['Space Grotesk','Inter','sans-serif']},colors:{ocean:{50:'#F0F7FD',100:'#DCF0FA',200:'#B8E3F6',300:'#91D5F1',400:'#5FC3EC',500:'#33B0E5',600:'#1A8FCC',700:'#1570A0',800:'#105478',900:'#0A3952'},abyss:{50:'#E8ECF2',100:'#C5CFDC',200:'#9DADC4',300:'#6A80A0',400:'#4A6080',500:'#2E4565',600:'#1E3350',700:'#142740',800:'#0C1B32',900:'#061026'},ember:'#F59E0B',rose:'#EC4899',mint:'#10B981',violet:'#7C3AED'}}}}</script>
-    <style>
+{% extends "base_dashboard.html" %}
+{% block title %}静态图像采集{% endblock %}
+{% block topbar_greeting %}静态图像采集{% endblock %}
+{% block topbar_sub %}静态实验 · 步骤 1 · 激光衍射测量{% endblock %}
+{% block app_body_class %} app-body--capture{% endblock %}
+
+{% block load_tailwind %}
+<script defer src="https://cdn.tailwindcss.com"></script>
+{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/capture_page.css') }}?v=11">
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']},colors:{ocean:{50:'#F0F7FD',100:'#DCF0FA',200:'#B8E3F6',300:'#91D5F1',400:'#5FC3EC',500:'#33B0E5',600:'#1A8FCC',700:'#1570A0',800:'#105478',900:'#0A3952'},abyss:{50:'#E8ECF2',100:'#C5CFDC',200:'#9DADC4',300:'#6A80A0',400:'#4A6080',500:'#2E4565',600:'#1E3350',700:'#142740',800:'#0C1B32',900:'#061026'},ember:'#F59E0B',rose:'#EC4899',mint:'#10B981',violet:'#7C3AED'}}}}</script>
+<style>
         :root{--ocean:#91D5F1;--violet:#7C3AED;--ember:#F59E0B;--rose:#EC4899;--mint:#10B981}
         *{scrollbar-width:thin;scrollbar-color:var(--ocean) transparent}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--ocean);border-radius:3px}
         body{font-family:'Inter',system-ui,sans-serif;background:#F8FAFE;color:#1E293B}
-        .glass{background:rgba(255,255,255,.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(145,213,241,.18)}
-        .glass-heavy{background:rgba(255,255,255,.9);backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);border:1px solid rgba(145,213,241,.22);box-shadow:0 8px 32px rgba(145,213,241,.06)}
+        .glass{background:#fff;border:1px solid #e2e8f0;box-shadow:0 4px 16px rgba(15,23,42,.04)}
         .gradient-cta{background:linear-gradient(135deg,#91D5F1,#6366F1,#7C3AED)}
         .gradient-primary{background:linear-gradient(135deg,#91D5F1,#5FC3EC,#33B0E5,#6366F1);background-size:300% 300%;animation:gradientShift 8s ease infinite}
         @keyframes gradientShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
@@ -29,7 +31,7 @@
         input[type="range"]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#DCE5EB;outline:none}
         input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#91D5F1;cursor:pointer;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.1)}
         select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2391D5F1' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;-webkit-appearance:none;appearance:none;padding-right:28px}
-        #camera-preview,#captured-image{border-radius:14px}
+        #camera-preview{border-radius:14px}
         #camera-placeholder{background:linear-gradient(135deg,#F0F7FD,#F8FAFE)}
         .toolbar-btn{transition:all .2s}.toolbar-btn:hover{transform:translateY(-1px)}
         .result-badge{font-feature-settings:"tnum";font-variant-numeric:tabular-nums}
@@ -49,84 +51,136 @@
         @keyframes pulseRing{0%{transform:scale(.8);opacity:1}100%{transform:scale(2.2);opacity:0}}
         @keyframes floatUp{0%{transform:translateY(20px);opacity:0}20%{opacity:1}100%{transform:translateY(0);opacity:1}}
         @keyframes nnPulse{0%,100%{r:3;opacity:.7}50%{r:5;opacity:1}}
-    </style>
-</head>
-<body class="min-h-screen">
-    <nav class="glass-heavy sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-ocean-300/40"><i class="fa fa-flask text-white text-lg"></i></div>
-                <div><span class="font-display font-bold text-lg text-abyss-800">SIREN-PINNs</span><span class="text-[10px] px-2 py-0.5 rounded-full bg-ocean-100 text-ocean-600 font-semibold ml-2">v3.0</span></div>
+        @keyframes loadingSlideIn{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+        .loading-enter{animation:loadingSlideIn .55s cubic-bezier(.23,1,.32,1) forwards}
+        @keyframes surfaceGrow{from{opacity:0;transform:perspective(800px) rotateX(12deg) scaleY(.72)}to{opacity:1;transform:perspective(800px) rotateX(0) scaleY(1)}}
+        .surface3d-card.is-revealed .surface3d-img-wrap img{animation:surfaceGrow .85s cubic-bezier(.23,1,.32,1) forwards}
+        .surface3d-card.is-revealed:nth-child(2) .surface3d-img-wrap img{animation-delay:.18s}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="capture-page">
+    <header class="capture-page-head">
+        <div class="capture-breadcrumb"><a href="/">首页</a> / 图像采集</div>
+        <div class="capture-title-row">
+            <div>
+                <h2>激光衍射测量</h2>
+                <div class="capture-tags">
+                    <span class="capture-tag">SIREN 神经隐式场</span>
+                    <span class="capture-tag capture-tag-violet">PINNs 物理约束</span>
+                    <span class="capture-tag capture-tag-mint">亚像素级高精度</span>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <a href="/" class="px-4 py-2.5 rounded-xl text-sm font-medium text-abyss-600 hover:bg-ocean-50 transition-all">首页</a>
-                <a href="/laser-diffraction" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white gradient-cta shadow-lg">图像采集</a>
-                <a href="/data-processing" class="px-4 py-2.5 rounded-xl text-sm font-medium text-abyss-600 hover:bg-ocean-50 transition-all">数据处理</a>
-            </div>
-            <button id="chat-nav-btn" class="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-cta text-white text-sm font-semibold btn-cta shadow-lg"><i class="fa fa-comments"></i><span class="hidden md:inline">AI 助手</span></button>
+            <button type="button" class="capture-btn-guide" id="capture-lab-guide-btn"><i class="fa fa-book"></i> 实验指导</button>
         </div>
-    </nav>
+    </header>
 
-    <main class="max-w-7xl mx-auto px-8 py-8">
-        <div class="mb-8">
-            <span class="section-label text-violet">Diffraction Analysis</span>
-            <h1 class="text-3xl font-display font-extrabold text-gradient mt-2 mb-1">激光衍射测量</h1>
-            <p class="text-abyss-400 text-sm">SIREN 神经隐式场 · PINNs 物理约束 · 亚像素级高精度测量</p>
+    <!-- 实时采集 -->
+    <div class="capture-card mb-4">
+        <div class="capture-card-head">
+            <div class="capture-card-head-left">
+                <span class="capture-status-dot pulse-dot" id="capture-status-dot"></span>
+                <span>实时采集</span>
+                <span class="capture-status-label" id="capture-status-text">待机</span>
+            </div>
         </div>
 
-        <!-- Camera + Results Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-            <!-- Camera - 3/5 -->
-            <div class="lg:col-span-3 glass rounded-2xl overflow-hidden">
-                <div class="px-5 py-3.5 border-b border-ocean-100 flex items-center flex-wrap gap-3 justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="w-2.5 h-2.5 rounded-full bg-mint pulse-dot"></div>
-                        <span class="text-sm font-bold text-abyss-700">实时采集</span>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <button id="start-camera-btn" class="toolbar-btn px-3.5 py-2 rounded-lg bg-mint/10 text-mint text-xs font-semibold hover:bg-mint/20"><i class="fa fa-video-camera mr-1.5"></i>打开摄像头</button>
-                        <select id="camera-select" class="hidden px-2 py-1.5 rounded-lg bg-white border border-ocean-200 text-abyss-700 text-xs font-medium max-w-[200px]"><option value="">选择摄像头...</option></select>
-                        <button id="confirm-camera-btn" class="toolbar-btn hidden px-3.5 py-2 rounded-lg bg-mint text-white text-xs font-semibold hover:opacity-90 shadow-sm"><i class="fa fa-check mr-1.5"></i>确认</button>
-                        <button id="release-camera-btn" class="toolbar-btn hidden px-3.5 py-2 rounded-lg bg-red-50 text-red-500 text-xs font-semibold hover:bg-red-100"><i class="fa fa-power-off mr-1.5"></i>关闭</button>
-                        <button id="capture-btn" class="toolbar-btn hidden px-3.5 py-2 rounded-lg bg-ocean-50 text-ocean-600 text-xs font-semibold hover:bg-ocean-100"><i class="fa fa-camera mr-1.5"></i>拍照</button>
-                        <button id="retake-btn" class="toolbar-btn hidden px-3.5 py-2 rounded-lg bg-abyss-50 text-abyss-400 text-xs font-semibold hover:bg-abyss-100"><i class="fa fa-refresh mr-1.5"></i>重拍</button>
-                        <label class="toolbar-btn px-3.5 py-2 rounded-lg bg-violet-50 text-violet text-xs font-semibold hover:bg-violet-100 cursor-pointer"><i class="fa fa-upload mr-1.5"></i>上传<input type="file" id="upload-input" accept="image/*" class="hidden"></label>
-                    </div>
-                </div>
-                <div class="relative aspect-video flex items-center justify-center bg-abyss-50/30">
-                    <video id="camera-preview" autoplay playsinline class="w-full h-full object-contain"></video>
-                    <canvas id="capture-canvas" class="hidden"></canvas>
-                    <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center">
-                        <div class="w-20 h-20 rounded-full bg-ocean-50 flex items-center justify-center mb-5"><i class="fa fa-video-camera text-ocean-300 text-3xl"></i></div>
-                        <span class="text-abyss-400 text-sm font-medium">点击「打开摄像头」开始采集</span>
-                    </div>
+        <div class="capture-toolbar-section">
+            <div class="capture-toolbar-group">
+                <span class="capture-toolbar-group__label">设备</span>
+                <div class="capture-toolbar-group__actions">
+                    <button type="button" id="start-camera-btn" class="toolbar-btn"><i class="fa fa-video-camera"></i> 打开摄像头</button>
+                    <select id="camera-select" class="hidden capture-camera-select" title="选择外接或内置摄像头"><option value="">选择摄像头...</option></select>
+                    <button type="button" id="confirm-camera-btn" class="toolbar-btn hidden"><i class="fa fa-check"></i> 确认</button>
+                    <button type="button" id="release-camera-btn" class="toolbar-btn hidden"><i class="fa fa-power-off"></i> 关闭</button>
                 </div>
             </div>
-
-            <!-- Right Panel - 2/5 -->
-            <div class="lg:col-span-2 flex flex-col gap-5">
-                <div id="captured-preview" class="hidden glass rounded-2xl overflow-hidden flex-1">
-                    <div class="px-4 py-3 border-b border-ocean-100 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-mint"></div><span class="text-xs font-bold text-abyss-600">已拍摄</span></div>
-                    <div class="p-4 flex items-center justify-center bg-abyss-50/30" style="min-height:200px"><img id="captured-image" src="" alt="Preview" class="max-w-full max-h-52 object-contain rounded-xl"></div>
+            <div class="capture-toolbar-divider" aria-hidden="true"></div>
+            <div class="capture-toolbar-group">
+                <span class="capture-toolbar-group__label">采集</span>
+                <div class="capture-toolbar-group__actions">
+                    <button type="button" id="capture-btn" class="toolbar-btn hidden"><i class="fa fa-camera"></i> 拍照</button>
                 </div>
-
-                <button id="analyze-btn" class="hidden w-full py-3.5 rounded-xl gradient-cta text-white font-bold text-sm btn-cta shadow-lg"><i class="fa fa-play-circle mr-2"></i>开始分析</button>
-
-                <div id="results" class="hidden space-y-3 fade-in">
-                    <div class="glass rounded-xl p-5 card-premium">
-                        <div class="result-label text-violet mb-2">中央亮纹位置 H₀</div>
-                        <div class="text-2xl font-bold font-mono text-abyss-800 result-badge" id="centralPeakHeight">--</div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="glass rounded-xl p-4 card-premium"><div class="result-label text-ocean-500 mb-1.5">Δx₁ (+1级)</div><div class="text-sm font-bold font-mono text-abyss-700 result-badge" id="deltaX1">--</div></div>
-                        <div class="glass rounded-xl p-4 card-premium"><div class="result-label text-violet mb-1.5">Δx₂ (-1级)</div><div class="text-sm font-bold font-mono text-abyss-700 result-badge" id="deltaX2">--</div></div>
-                    </div>
-                    <div class="glass rounded-xl p-5 card-premium"><div class="result-label text-rose mb-2">平均间距 Δx</div><div class="text-xl font-bold font-mono text-abyss-800 result-badge" id="deltaXavg">--</div></div>
+            </div>
+            <div class="capture-toolbar-divider" aria-hidden="true"></div>
+            <div class="capture-toolbar-group capture-toolbar-group--import">
+                <span class="capture-toolbar-group__label">导入</span>
+                <div class="capture-toolbar-group__actions">
+                    <label class="toolbar-btn toolbar-btn-upload cursor-pointer"><i class="fa fa-upload"></i> 上传图片<input type="file" id="upload-input" accept="image/*" class="hidden"></label>
+                    <button type="button" id="load-sample-btn" class="toolbar-btn toolbar-btn-sample"><i class="fa fa-magic"></i> 加载样例图</button>
                 </div>
             </div>
         </div>
 
-        <!-- Loading & Error -->
+        <div class="capture-workspace">
+            <div class="capture-viewport-wrap" id="capture-viewport">
+                <video id="camera-preview" autoplay playsinline muted></video>
+                <canvas id="capture-canvas" class="hidden"></canvas>
+                <div id="capture-scan-overlay" class="capture-scan-overlay hidden" aria-hidden="true">
+                    <div class="capture-scan-beam"></div>
+                    <div class="capture-scan-grid"></div>
+                    <span class="capture-scan-label"><i class="fa fa-microchip"></i> AI 分析中…</span>
+                </div>
+                <div id="camera-placeholder">
+                    <i class="fa fa-video-camera"></i>
+                    <strong>实时预览区</strong>
+                    <span>点击「打开摄像头」开始采集，或在右侧查看已拍照片</span>
+                </div>
+                <div class="capture-viewport-meta">
+                    <span id="viewport-resolution">— × —</span>
+                    <span id="viewport-active-camera"></span>
+                    <span>采集比例 3:4 · 1440×1920</span>
+                </div>
+                <div id="capture-crop-guide" class="capture-crop-guide hidden" aria-hidden="true"></div>
+            </div>
+
+            <aside class="capture-frame-panel" id="capture-frame-panel">
+                <div class="capture-frame-panel__head">
+                    <div>
+                        <h3 class="capture-frame-panel__title">采集结果</h3>
+                        <p class="capture-frame-panel__subtitle">用于 AI 分析的当前帧</p>
+                    </div>
+                    <span class="capture-frame-status" id="capture-frame-status">待采集</span>
+                </div>
+
+                <div class="capture-frame-empty" id="capture-frame-empty">
+                    <div class="capture-frame-empty__icon"><i class="fa fa-picture-o"></i></div>
+                    <p>暂无采集图像</p>
+                    <span>拍照、上传或加载样例图后，大图预览将显示在这里</span>
+                </div>
+
+                <div id="captured-preview" class="capture-frame-preview hidden">
+                    <div class="capture-frame-preview__image">
+                        <img id="captured-image" src="" alt="当前采集帧">
+                        <span class="capture-frame-preview__badge">当前帧</span>
+                    </div>
+                    <dl class="capture-frame-preview__meta">
+                        <div><dt>采集时间</dt><dd id="captured-frame-time">—</dd></div>
+                        <div><dt>图像尺寸</dt><dd id="captured-frame-size">—</dd></div>
+                        <div><dt>来源</dt><dd id="captured-frame-source">—</dd></div>
+                    </dl>
+                    <div class="capture-frame-preview__actions">
+                        <button type="button" id="retake-btn" class="capture-frame-retake hidden"><i class="fa fa-refresh"></i> 重新采集</button>
+                    </div>
+                </div>
+
+                <div id="capture-ready-bar" class="capture-frame-cta hidden">
+                    <div class="capture-frame-cta__text">
+                        <i class="fa fa-check-circle"></i>
+                        <span>图像已就绪，可启动 AI 分析流水线</span>
+                    </div>
+                    <button type="button" class="capture-ready-analyze" id="analyze-btn-ready"><i class="fa fa-play-circle"></i> 开始分析</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div id="error" class="hidden glass rounded-xl p-4 mb-4 bg-rose-50/80 border border-rose-200">
+        <div class="flex items-start gap-3"><i class="fa fa-exclamation-circle text-rose-500 mt-0.5"></i><p class="text-sm text-rose-700 font-medium" id="errorMessage"></p></div>
+    </div>
+
+    <!-- Loading & Pipeline -->
         <div id="loading" class="hidden glass rounded-2xl overflow-hidden mb-6" style="animation:fadeIn .4s ease">
             <div class="px-6 py-4 border-b border-ocean-100 flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -220,883 +274,164 @@
                 </div>
             </div>
         </div>
-        <div id="error" class="hidden glass rounded-xl p-5 mb-6 bg-rose-50/30 border border-rose-200"><div class="flex items-start gap-3"><i class="fa fa-exclamation-circle text-rose mt-0.5"></i><p class="text-sm text-rose-600 font-medium" id="errorMessage"></p></div></div>
-
-        <!-- Charts -->
-        <div id="charts-section" class="hidden fade-in">
-            <div class="mb-8">
-                <div class="glass rounded-2xl overflow-hidden mb-6"><div class="px-5 py-3 border-b border-ocean-100 flex items-center gap-2"><i class="fa fa-image text-ocean-500"></i><span class="text-sm font-bold text-abyss-700">灰度图</span></div><div class="p-5 bg-abyss-50/30 flex justify-center"><img id="grayImage" src="" class="max-w-full max-h-96 object-contain rounded-xl"></div></div>
-                <div class="glass rounded-2xl overflow-hidden"><div class="px-5 py-3 border-b border-ocean-100 flex items-center gap-2"><i class="fa fa-bar-chart text-violet"></i><span class="text-sm font-bold text-abyss-700">光强剖面</span></div><div class="p-5 bg-abyss-50/30 flex justify-center"><img id="intensityProfile" src="" class="max-w-full max-h-96 object-contain rounded-xl"></div></div>
+    <!-- Charts -->
+    <div id="charts-section" class="hidden fade-in mb-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="glass rounded-2xl overflow-hidden">
+                <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-2"><i class="fa fa-image text-blue-500"></i><span class="text-sm font-bold text-slate-800">灰度图</span></div>
+                <div class="p-5 bg-slate-50 flex justify-center"><img id="grayImage" src="" alt="灰度图" class="max-w-full max-h-96 object-contain rounded-lg"></div>
             </div>
-        </div>
-    </main>
-
-    <footer class="border-t border-ocean-100/50 py-8"><div class="max-w-7xl mx-auto px-8 flex justify-between"><div class="flex items-center gap-2"><div class="w-6 h-6 rounded-lg gradient-primary flex items-center justify-center"><i class="fa fa-flask text-white text-xs"></i></div><span class="text-xs text-abyss-400">SIREN-PINNs</span></div><span class="text-xs text-abyss-300">© 2026</span></div></footer>
-
-    <!-- AI Chat -->
-    <div id="chat-container" class="fixed bottom-6 right-6 z-50">
-        <div id="chat-expanded" class="hidden glass-heavy rounded-2xl shadow-2xl w-80 overflow-hidden" style="max-height:520px">
-            <div class="gradient-cta p-4 flex justify-between items-center">
-                <div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><i class="fa fa-robot text-white"></i></div><div><div class="text-white text-sm font-bold">AI 实验助手</div><div class="text-[10px] text-white/70">在线</div></div></div>
-                <button id="close-btn" class="text-white/60 hover:text-white p-1"><i class="fa fa-times"></i></button>
-            </div>
-            <div id="chat-messages" class="p-4 h-72 overflow-y-auto bg-abyss-50/30">
-                <div class="flex mb-4"><div class="w-7 h-7 rounded-full bg-ocean-100 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">你好！我是实验助手，有什么可以帮助你的吗？</div></div></div>
-            </div>
-            <div class="p-4 border-t border-ocean-50 bg-white">
-                <div class="flex gap-2"><input type="text" id="chat-input" class="flex-1 bg-ocean-50/50 border border-ocean-100 rounded-xl px-4 py-2.5 text-sm text-abyss-800 placeholder-abyss-300 focus:outline-none focus:border-ocean-300" placeholder="输入问题..."><button id="send-btn" class="gradient-cta text-white rounded-xl w-10 h-10 flex items-center justify-center shadow-md"><i class="fa fa-paper-plane text-sm"></i></button></div>
+            <div class="glass rounded-2xl overflow-hidden">
+                <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-2"><i class="fa fa-bar-chart text-violet-500"></i><span class="text-sm font-bold text-slate-800">光强剖面</span></div>
+                <div class="p-5 bg-slate-50 flex justify-center"><img id="intensityProfile" src="" alt="光强剖面" class="max-w-full max-h-96 object-contain rounded-lg"></div>
             </div>
         </div>
     </div>
 
-    <script>
-    (function(){
-        var startCameraBtn=document.getElementById('start-camera-btn'),captureBtn=document.getElementById('capture-btn'),retakeBtn=document.getElementById('retake-btn'),analyzeBtn=document.getElementById('analyze-btn'),releaseCameraBtn=document.getElementById('release-camera-btn'),cameraPreview=document.getElementById('camera-preview'),captureCanvas=document.getElementById('capture-canvas'),capturedPreview=document.getElementById('captured-preview'),capturedImage=document.getElementById('captured-image'),loading=document.getElementById('loading'),error=document.getElementById('error'),results=document.getElementById('results'),errorMessage=document.getElementById('errorMessage'),cameraPlaceholder=document.getElementById('camera-placeholder');
-        var cameraSelect=document.getElementById('camera-select'),confirmCameraBtn=document.getElementById('confirm-camera-btn');
-        var stream=null,capturedDataUrl=null;
+    <!-- 测量结果（主内容区） -->
+    <div id="results" class="hidden capture-results-main mb-4">
+        <div class="capture-results-main-head">
+            <div class="capture-results-main-title">
+                <i class="fa fa-check-circle"></i>
+                <div>
+                    <h3>测量结果</h3>
+                    <p>SIREN 亚像素寻峰 · PINNs 物理约束 · 标尺 OCR 标定</p>
+                </div>
+            </div>
+            <a href="/data-processing" class="btn-go-process-main" id="go-to-process-btn"><i class="fa fa-arrow-right"></i> 带入数据处理</a>
+        </div>
+        <div class="capture-results-main-grid">
+            <div class="capture-result-card capture-result-card--hero">
+                <div class="result-label">中央亮纹 H₀</div>
+                <div class="result-badge" id="centralPeakHeight">--</div>
+            </div>
+            <div class="capture-result-card">
+                <div class="result-label">Δx₁ (+1级)</div>
+                <div class="result-badge" id="deltaX1">--</div>
+            </div>
+            <div class="capture-result-card">
+                <div class="result-label">Δx₂ (-1级)</div>
+                <div class="result-badge" id="deltaX2">--</div>
+            </div>
+            <div class="capture-result-card">
+                <div class="result-label">平均间距 Δx</div>
+                <div class="result-badge" id="deltaXavg">--</div>
+            </div>
+        </div>
+    </div>
 
-        function startCamera(deviceId){
-            if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}
-            var constraints={video:{width:{ideal:1080},height:{ideal:1440},frameRate:{ideal:30}},audio:false};
-            if(deviceId){constraints.video.deviceId={exact:deviceId}}
-            navigator.mediaDevices.getUserMedia(constraints)
-            .then(function(s){
-                stream=s;cameraPreview.srcObject=stream;
-                cameraSelect.classList.add('hidden');confirmCameraBtn.classList.add('hidden');
-                startCameraBtn.classList.add('hidden');releaseCameraBtn.classList.remove('hidden');
-                captureBtn.classList.remove('hidden');capturedPreview.classList.add('hidden');
-                analyzeBtn.classList.add('hidden');cameraPlaceholder.classList.add('hidden');hideError()
-            })
-            .catch(function(err){showError(err.name==='NotAllowedError'?'摄像头权限被拒绝。':err.name==='NotFoundError'?'未找到摄像头。':'摄像头错误: '+err.message)})
-        }
+    <!-- 三维神经隐式场曲面 -->
+    <div id="surface3d-section" class="hidden surface3d-section mb-4">
+        <div class="surface3d-section-head">
+            <div class="surface3d-section-title">
+                <i class="fa fa-cube"></i>
+                <div>
+                    <h3>神经隐式场三维曲面</h3>
+                    <p>SIREN 拟合光强分布 · PINNs 物理约束优化后的隐式场可视化</p>
+                </div>
+            </div>
+            <span class="surface3d-badge"><i class="fa fa-check-circle"></i> 分析完成</span>
+        </div>
+        <div class="surface3d-grid">
+            <article class="surface3d-card">
+                <div class="surface3d-card-head">
+                    <span class="surface3d-tag surface3d-tag-siren">SIREN</span>
+                    <span class="surface3d-card-label">光强隐式场 I(x, y)</span>
+                </div>
+                <div class="surface3d-img-wrap">
+                    <img src="{{ surface3d_siren_src }}" alt="SIREN 神经隐式场三维曲面" decoding="async">
+                </div>
+                <p class="surface3d-caption">正弦激活网络拟合亚像素光强分布，峰值对应衍射级次位置</p>
+            </article>
+            <article class="surface3d-card">
+                <div class="surface3d-card-head">
+                    <span class="surface3d-tag surface3d-tag-pinn">PINNs</span>
+                    <span class="surface3d-card-label">物理约束优化曲面</span>
+                </div>
+                <div class="surface3d-img-wrap">
+                    <img src="{{ surface3d_pinn_src }}" alt="PINNs 物理约束优化三维曲面" decoding="async">
+                </div>
+                <p class="surface3d-caption">MSE + 光滑性 + 对称性约束联合优化后的收敛隐式场</p>
+            </article>
+        </div>
+    </div>
 
-        startCameraBtn.addEventListener('click',function(){
-            if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showError('浏览器不支持摄像头访问。');return}
-            navigator.mediaDevices.getUserMedia({video:true}).then(function(tmpStream){
-                tmpStream.getTracks().forEach(function(t){t.stop()});
-                navigator.mediaDevices.enumerateDevices().then(function(devices){
-                    var cameras=devices.filter(function(d){return d.kind==='videoinput'});
-                    if(cameras.length===0){showError('未找到摄像头。');return}
-                    if(cameras.length===1){
-                        startCamera(cameras[0].deviceId);
-                        return;
-                    }
-                    cameraSelect.innerHTML='';
-                    cameras.forEach(function(c,i){
-                        var opt=document.createElement('option');
-                        opt.value=c.deviceId;
-                        opt.textContent=c.label||('摄像头 '+(i+1));
-                        cameraSelect.appendChild(opt);
-                    });
-                    var externalCam=cameras.find(function(c){
-                        var l=(c.label||'').toLowerCase();
-                        return l.indexOf('usb')>=0||l.indexOf('external')>=0||l.indexOf('uvc')>=0||l.indexOf('webcam')>=0;
-                    });
-                    if(externalCam){
-                        cameraSelect.value=externalCam.deviceId;
-                    }else{
-                        var builtin=cameras.findIndex(function(c){
-                            var l=(c.label||'').toLowerCase();
-                            return l.indexOf('integrated')>=0||l.indexOf('内置')>=0||l.indexOf('笔记本')>=0;
-                        });
-                        if(builtin>=0&&cameras.length>1){
-                            cameraSelect.value=cameras[builtin===cameras.length-1?0:builtin+1].deviceId;
-                        }else{
-                            cameraSelect.value=cameras[cameras.length-1].deviceId;
-                        }
-                    }
-                    cameraSelect.classList.remove('hidden');
-                    confirmCameraBtn.classList.remove('hidden');
-                    startCameraBtn.classList.add('hidden');
-                });
-            }).catch(function(){showError('请先授予摄像头权限后重试。')});
-        });
+    <!-- 实验信息 -->
+    <div class="capture-card capture-exp-info">
+        <div class="capture-card-head"><span>实验信息</span></div>
+        <div class="p-5">
+            <div class="capture-exp-grid">
+                <div><label>实验名称</label><strong>毛细波激光衍射</strong></div>
+                <div><label>实验类型</label><strong>光学测量</strong></div>
+                <div><label>实验编号</label><strong>SIREN-EXP-01</strong></div>
+                <div><label>实验时间</label><strong id="exp-time-label">—</strong></div>
+                <div><label>实验状态</label><strong style="color:#16a34a;">进行中</strong></div>
+            </div>
+            <p class="capture-exp-intro">通过 He-Ne 激光照射液面毛细波，观察衍射条纹分布；结合 SIREN 亚像素寻峰与 PINNs 物理约束，测定条纹间距 Δx 与零级亮纹位置 H₀，为表面张力计算提供输入数据。</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-        confirmCameraBtn.addEventListener('click',function(){
-            var deviceId=cameraSelect.value;
-            if(!deviceId){showError('请选择一个摄像头。');return}
-            startCamera(deviceId);
-        });
+{% block right_rail %}
+<aside class="capture-rail">
+    <div class="app-card">
+        <div class="app-card-head">最近采集</div>
+        <div class="app-card-body" style="padding-top:8px;">
+            <div id="recent-capture-list">
+                <div class="capture-rail-list-item" id="recent-capture-empty">
+                    <div class="capture-rail-thumb"><i class="fa fa-image"></i></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:600;">暂无图像</div>
+                        <div style="font-size:11px;color:var(--app-muted);">拍照或上传后显示</div>
+                    </div>
+                </div>
+                <div class="capture-rail-list-item hidden" id="recent-capture-active">
+                    <div class="capture-rail-thumb" id="recent-thumb-wrap"><img id="recent-thumb-img" src="" alt=""></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:600;">当前帧 <span class="app-badge app-badge-blue" style="font-size:10px;padding:2px 6px;">Current</span></div>
+                        <div style="font-size:11px;color:var(--app-muted);" id="recent-capture-meta">刚刚</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        captureBtn.addEventListener('click',function(){if(!stream)return;captureCanvas.width=cameraPreview.videoWidth;captureCanvas.height=cameraPreview.videoHeight;captureCanvas.getContext('2d').drawImage(cameraPreview,0,0);capturedDataUrl=captureCanvas.toDataURL('image/png');capturedImage.src=capturedDataUrl;capturedPreview.classList.remove('hidden');captureBtn.classList.add('hidden');retakeBtn.classList.remove('hidden');analyzeBtn.classList.remove('hidden')});
+    <div class="app-card">
+        <div class="app-card-head">设备状态</div>
+        <div class="app-card-body">
+            <div class="capture-device-grid">
+                <div class="capture-device-tile"><i class="fa fa-video-camera"></i><span>摄像头</span><strong id="device-cam-status">待机</strong></div>
+                <div class="capture-device-tile"><i class="fa fa-flash"></i><span>激光器</span><strong>正常</strong></div>
+                <div class="capture-device-tile"><i class="fa fa-arrows"></i><span>采集模块</span><strong>就绪</strong></div>
+                <div class="capture-device-tile"><i class="fa fa-thermometer-half"></i><span>分析引擎</span><strong>正常</strong></div>
+            </div>
+        </div>
+    </div>
 
-        releaseCameraBtn.addEventListener('click',function(){if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}cameraPreview.srcObject=null;cameraSelect.classList.add('hidden');confirmCameraBtn.classList.add('hidden');startCameraBtn.classList.remove('hidden');releaseCameraBtn.classList.add('hidden');captureBtn.classList.add('hidden');retakeBtn.classList.add('hidden');analyzeBtn.classList.add('hidden');capturedPreview.classList.add('hidden');cameraPlaceholder.classList.remove('hidden');hideError()});
+    <div class="app-card">
+        <div class="app-card-head">快捷操作</div>
+        <div class="app-card-body">
+            <div class="capture-quick-grid">
+                <button type="button" class="capture-quick-btn" id="quick-open-camera"><i style="background:linear-gradient(135deg,#22c55e,#16a34a);" class="fa fa-video-camera"></i>打开摄像头</button>
+                <a href="/data-processing" class="capture-quick-btn"><i style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);" class="fa fa-calculator"></i>数据处理</a>
+                <label class="capture-quick-btn cursor-pointer"><i style="background:linear-gradient(135deg,#3b82f6,#2563eb);" class="fa fa-upload"></i>上传图片<input type="file" id="upload-input-quick" accept="image/*" class="hidden"></label>
+                <button type="button" class="capture-quick-btn" id="quick-retake"><i style="background:linear-gradient(135deg,#f59e0b,#ea580c);" class="fa fa-refresh"></i>重新拍摄</button>
+            </div>
+        </div>
+    </div>
 
-        retakeBtn.addEventListener('click',function(){capturedPreview.classList.add('hidden');capturedDataUrl=null;retakeBtn.classList.add('hidden');analyzeBtn.classList.add('hidden');captureBtn.classList.remove('hidden')});
+    <div class="app-card">
+        <div class="app-card-head">实验备注</div>
+        <div class="app-card-body">
+            <textarea class="capture-notes" id="capture-notes" placeholder="记录液体种类、振动频率、环境条件等…"></textarea>
+        </div>
+    </div>
+</aside>
+{% endblock %}
 
-        document.getElementById('upload-input').addEventListener('change',function(e){var f=e.target.files[0];if(!f||!f.type.startsWith('image/')){showError('请选择图片文件。');return}var r=new FileReader();r.onload=function(ev){capturedDataUrl=ev.target.result;capturedImage.src=capturedDataUrl;capturedPreview.classList.remove('hidden');captureBtn.classList.add('hidden');retakeBtn.classList.remove('hidden');analyzeBtn.classList.remove('hidden');cameraPlaceholder.classList.add('hidden');hideError()};r.readAsDataURL(f)});
-
-        var pipelineTimers=[];
-        var pipelineIntervals=[];
-        var _elapsedTimer=null,_elapsedSec=0;
-        var _animFrame=null;
-        var _barFrame=null;
-        var _streamReader=null;
-        var _streamAbort=null;
-        var stepHints=['正在预处理图像数据...','EasyOCR 识别标尺数字...','提取水平光强剖面...','SIREN 网络拟合亚像素峰位...','PINN 物理约束优化损失函数...','输出 H₀ 和 Δx 结果...'];
-
-        var _currentStep=-1,_stepAnimDone=false,_stepBackendDone=false;
-        var _eventQueue=[];
-        var _backendDoneSteps={};
-
-        function clearAllTimers(){
-            pipelineTimers.forEach(function(t){clearTimeout(t)});pipelineTimers=[];
-            pipelineIntervals.forEach(function(t){clearInterval(t)});pipelineIntervals=[];
-            if(_animFrame){cancelAnimationFrame(_animFrame);_animFrame=null}
-            if(_barFrame){cancelAnimationFrame(_barFrame);_barFrame=null}
-            if(_elapsedTimer){clearInterval(_elapsedTimer);_elapsedTimer=null}
-            if(_streamAbort){try{_streamAbort.abort()}catch(e){}_streamAbort=null}
-            _streamReader=null;
-            _eventQueue=[];
-            _backendDoneSteps={};
-            ['vis-canvas','vis-nn','vis-result'].forEach(function(id){
-                var el=document.getElementById(id);if(el)el.classList.add('hidden');
-            });
-            document.getElementById('active-visual').style.display='none';
-        }
-
-        function resetPipeline(){
-            clearAllTimers();
-            for(var i=0;i<6;i++){
-                var card=document.getElementById('pcard-'+i),dot=document.getElementById('pdot-'+i),label=document.getElementById('plabel-'+i);
-                card.className='pipeline-card rounded-xl p-3 border border-transparent transition-all duration-500 relative overflow-hidden';
-                dot.className='w-5 h-5 rounded-full border-2 border-ocean-200 bg-white flex items-center justify-center flex-shrink-0 transition-all duration-500';
-                dot.querySelector('i').style.opacity='0';
-                label.className='text-[11px] font-bold text-abyss-400 truncate transition-colors duration-300';
-            }
-            document.getElementById('loading-bar').style.width='0%';
-            document.getElementById('loading-hint').textContent='初始化分析引擎...';
-            document.getElementById('loading-elapsed').textContent='0.0s';
-            _elapsedSec=0;
-        }
-
-        function activateCard(idx){
-            if(idx>=6)return;
-            if(idx>0){
-                var prevCard=document.getElementById('pcard-'+(idx-1)),prevDot=document.getElementById('pdot-'+(idx-1)),prevLabel=document.getElementById('plabel-'+(idx-1));
-                prevCard.className='pipeline-card rounded-xl p-3 border border-transparent transition-all duration-500 relative overflow-hidden card-done';
-                prevDot.className='w-5 h-5 rounded-full bg-mint border-2 border-mint flex items-center justify-center flex-shrink-0 transition-all duration-500';
-                prevDot.querySelector('i').style.opacity='1';
-                prevLabel.className='text-[11px] font-bold text-abyss-400 truncate transition-colors duration-300';
-            }
-            var card=document.getElementById('pcard-'+idx),dot=document.getElementById('pdot-'+idx),label=document.getElementById('plabel-'+(idx));
-            card.className='pipeline-card rounded-xl p-3 border border-transparent transition-all duration-500 relative overflow-hidden card-active';
-            if(!card.querySelector('.card-shimmer')){var sh=document.createElement('div');sh.className='card-shimmer';card.appendChild(sh)}
-            dot.className='w-5 h-5 rounded-full border-2 border-ocean-400 bg-ocean-50 flex items-center justify-center flex-shrink-0 transition-all duration-500 step-glow';
-            label.className='text-[11px] font-bold text-ocean-600 truncate transition-colors duration-300';
-            document.getElementById('loading-hint').textContent=stepHints[idx];
-            document.getElementById('active-visual').style.display='block';
-            ['vis-canvas','vis-nn','vis-result'].forEach(function(id){document.getElementById(id).classList.add('hidden')});
-            if(_barFrame){cancelAnimationFrame(_barFrame);_barFrame=null}
-            var barStart=(idx/6)*95;
-            var bar=document.getElementById('loading-bar');
-            bar.style.width=barStart+'%';
-        }
-
-        function completeAllSteps(){
-            for(var i=0;i<6;i++){
-                var card=document.getElementById('pcard-'+i),dot=document.getElementById('pdot-'+i);
-                card.className='pipeline-card rounded-xl p-3 border border-transparent transition-all duration-500 relative overflow-hidden card-done';
-                dot.className='w-5 h-5 rounded-full bg-mint border-2 border-mint flex items-center justify-center flex-shrink-0 transition-all duration-500';
-                dot.querySelector('i').style.opacity='1';
-            }
-            document.getElementById('loading-bar').style.width='100%';
-            document.getElementById('loading-hint').textContent='分析完成！';
-            ['vis-canvas','vis-nn','vis-result'].forEach(function(id){document.getElementById(id).classList.add('hidden')});
-        }
-
-        function _drawBg(ctx,dw,dh){
-            ctx.fillStyle='#0A1628';ctx.fillRect(0,0,dw,dh);
-            ctx.strokeStyle='rgba(51,176,229,.04)';ctx.lineWidth=1;
-            for(var g=0;g<dh;g+=30){ctx.beginPath();ctx.moveTo(0,g);ctx.lineTo(dw,g);ctx.stroke()}
-            for(var gx=0;gx<dw;gx+=30){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,dh);ctx.stroke()}
-        }
-        function _glowDot(ctx,x,y,r,color,alpha){
-            var g=ctx.createRadialGradient(x,y,0,x,y,r*3);
-            g.addColorStop(0,color.replace(')',','+alpha+')').replace('rgb','rgba'));
-            g.addColorStop(.4,color.replace(')',','+(alpha*.3)+')').replace('rgb','rgba'));
-            g.addColorStop(1,'rgba(0,0,0,0)');
-            ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*3,0,Math.PI*2);ctx.fill();
-            ctx.fillStyle=color;ctx.globalAlpha=alpha;ctx.beginPath();ctx.arc(x,y,r*.7,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-        }
-
-        function drawImagePreprocess(cb){
-            var cv=document.getElementById('vis-canvas'),ctx=cv.getContext('2d');
-            cv.classList.remove('hidden');
-            var img=new Image();img.crossOrigin='anonymous';
-            img.onload=function(){
-                var dw=cv.width,dh=cv.height;
-                var scale=Math.min(dw/img.width,dh/img.height)*0.65;
-                var iw=img.width*scale,ih=img.height*scale;
-                var ox=(dw-iw)/2,oy=(dh-ih)/2;
-                var particles=[];for(var i=0;i<30;i++)particles.push({x:Math.random()*dw,y:Math.random()*dh,r:Math.random()*1+.5,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,a:Math.random()*.3+.1});
-                var sweepX=0,startTime=Date.now(),duration=6000;
-                var grayCv=document.createElement('canvas');grayCv.width=img.width;grayCv.height=img.height;
-                var tCtx=grayCv.getContext('2d');tCtx.drawImage(img,0,0);
-                var imgData=tCtx.getImageData(0,0,grayCv.width,grayCv.height);var d=imgData.data;
-                for(var p=0;p<d.length;p+=4){var g=d[p]*.299+d[p+1]*.587+d[p+2]*.114;d[p]=d[p+1]=d[p+2]=g}
-                tCtx.putImageData(imgData,0,0);
-                function frame(){
-                    var elapsed=Date.now()-startTime,t=elapsed/1000;
-                    var rawX=Math.min(elapsed/duration,1);
-                    var easeX=rawX<.5?2*rawX*rawX:1-Math.pow(-2*rawX+2,2)/2;
-                    sweepX=easeX*dw;
-                    ctx.clearRect(0,0,dw,dh);
-                    _drawBg(ctx,dw,dh);
-                    particles.forEach(function(p){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=dw;if(p.x>dw)p.x=0;if(p.y<0)p.y=dh;if(p.y>dh)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(51,176,229,'+p.a*0.5+')';ctx.fill()});
-                    ctx.save();ctx.beginPath();ctx.rect(0,0,sweepX,dh);ctx.clip();
-                    ctx.drawImage(img,ox,oy,iw,ih);
-                    ctx.strokeStyle='rgba(51,176,229,.15)';ctx.lineWidth=1;ctx.strokeRect(ox,oy,iw,ih);
-                    ctx.restore();
-                    ctx.save();ctx.beginPath();ctx.rect(sweepX,0,dw-sweepX,dh);ctx.clip();
-                    ctx.drawImage(grayCv,ox,oy,iw,ih);
-                    ctx.strokeStyle='rgba(124,58,237,.15)';ctx.lineWidth=1;ctx.strokeRect(ox,oy,iw,ih);
-                    ctx.restore();
-                    ctx.save();ctx.globalAlpha=.08;ctx.fillStyle='#33B0E5';ctx.fillRect(sweepX-100,oy,200,ih);ctx.restore();
-                    ctx.beginPath();ctx.moveTo(sweepX,oy-5);ctx.lineTo(sweepX,oy+ih+5);
-                    ctx.strokeStyle='rgba(51,176,229,.9)';ctx.lineWidth=3;ctx.stroke();
-                    ctx.shadowColor='rgba(51,176,229,.8)';ctx.shadowBlur=22;ctx.stroke();ctx.shadowBlur=0;
-                    ctx.fillStyle='rgba(16,24,48,.88)';ctx.fillRect(sweepX-90,oy-32,180,26);
-                    ctx.strokeStyle='rgba(51,176,229,.4)';ctx.lineWidth=1;ctx.strokeRect(sweepX-90,oy-32,180,26);
-                    var pulseA=.7+Math.sin(t*3)*.3;
-                    ctx.fillStyle='rgba(51,176,229,'+pulseA+')';ctx.font='bold 14px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText('RGB → Grayscale',sweepX,oy-15);ctx.textAlign='start';
-                    var pct=Math.min(Math.floor(rawX*100),100);
-                    ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(ox,oy+ih+15,iw,5);
-                    var barGrad=ctx.createLinearGradient(ox,0,ox+iw*pct/100,0);
-                    barGrad.addColorStop(0,'#33B0E5');barGrad.addColorStop(1,'#7C3AED');
-                    ctx.fillStyle=barGrad;ctx.fillRect(ox,oy+ih+15,iw*pct/100,5);
-                    ctx.fillStyle='rgba(145,213,231,.5)';ctx.font='12px JetBrains Mono,monospace';
-                    ctx.fillText('预处理进度: '+pct+'%',ox,oy+ih+32);
-                    if(elapsed<duration){_animFrame=requestAnimationFrame(frame)}
-                    else{
-                        ctx.drawImage(grayCv,ox,oy,iw,ih);
-                        ctx.strokeStyle='rgba(16,185,129,.5)';ctx.lineWidth=2;ctx.strokeRect(ox,oy,iw,ih);
-                        ctx.fillStyle='rgba(16,185,129,.9)';ctx.font='bold 16px JetBrains Mono,monospace';ctx.textAlign='center';
-                        ctx.fillText('✓ 灰度化完成',dw/2,oy-15);ctx.textAlign='start';
-                        ctx.shadowBlur=0;
-                        setTimeout(function(){cv.classList.add('hidden');if(cb)cb()},1500);
-                    }
-                }
-                _animFrame=requestAnimationFrame(frame);
-            };
-            img.onerror=function(){
-                _drawBg(ctx,cv.width,cv.height);
-                ctx.fillStyle='#33B0E5';ctx.font='16px JetBrains Mono';ctx.textAlign='center';
-                ctx.fillText('图像预处理中...',cv.width/2,cv.height/2);ctx.textAlign='start';
-                setTimeout(cb,800);
-            };
-            img.src=capturedDataUrl;
-        }
-
-        function drawRulerDetection(cb){
-            var cv=document.getElementById('vis-canvas'),ctx=cv.getContext('2d');
-            cv.classList.remove('hidden');
-            var dw=cv.width,dh=cv.height;
-            var particles=[];for(var i=0;i<20;i++)particles.push({x:Math.random()*dw,y:Math.random()*dh,r:Math.random()*1+.5,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,a:Math.random()*.2+.05});
-            var rulerY=dh*.38,rulerH=70,rulerX=100,rulerW=dw-200;
-            var numPositions=[.2,.4,.6,.8];
-            var numLabels=['10','20','30','40'];
-            var scanPos=0,foundNums=[],scanPhase=0;
-            var startTime=Date.now();
-            var ocrBoxes=[];
-            var phaseStartTime=Date.now();
-            var pauseDuration=1800;
-            var scanDuration=2000;
-            var currentScanStart=0,currentTargetX=0,scanning=false;
-            var phaseState='scanning';
-            function frame(){
-                var t=(Date.now()-startTime)/1000;
-                ctx.clearRect(0,0,dw,dh);
-                _drawBg(ctx,dw,dh);
-                particles.forEach(function(p){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=dw;if(p.x>dw)p.x=0;if(p.y<0)p.y=dh;if(p.y>dh)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(51,176,229,'+p.a*0.5+')';ctx.fill()});
-                ctx.fillStyle='rgba(145,213,231,.25)';ctx.font='bold 15px JetBrains Mono,monospace';
-                ctx.fillText('EasyOCR 刻度尺识别',rulerX,rulerY-30);
-                ctx.fillStyle='rgba(16,24,48,.95)';ctx.strokeStyle='rgba(51,176,229,.2)';ctx.lineWidth=1.5;
-                var rr=8;ctx.beginPath();ctx.moveTo(rulerX+rr,rulerY);ctx.lineTo(rulerX+rulerW-rr,rulerY);ctx.arcTo(rulerX+rulerW,rulerY,rulerX+rulerW,rulerY+rr,rr);ctx.lineTo(rulerX+rulerW,rulerY+rulerH-rr);ctx.arcTo(rulerX+rulerW,rulerY+rulerH,rulerX+rulerW-rr,rulerY+rulerH,rr);ctx.lineTo(rulerX+rr,rulerY+rulerH);ctx.arcTo(rulerX,rulerY+rulerH,rulerX,rulerY+rulerH-rr,rr);ctx.lineTo(rulerX,rulerY+rr);ctx.arcTo(rulerX,rulerY,rulerX+rr,rulerY,rr);ctx.closePath();ctx.fill();ctx.stroke();
-                ctx.strokeStyle='rgba(145,213,231,.15)';ctx.lineWidth=1;
-                for(var i=0;i<=100;i++){var tx=rulerX+(i/100)*rulerW;var isMajor=i%10===0,isMid=i%5===0;ctx.beginPath();ctx.moveTo(tx,rulerY+(isMajor?0:isMid?18:28));ctx.lineTo(tx,rulerY+rulerH-(isMajor?0:isMid?18:28));ctx.strokeStyle='rgba(145,213,231,'+(isMajor?.5:isMid?.3:.12)+')';ctx.lineWidth=isMajor?2:1;ctx.stroke()}
-                numPositions.forEach(function(np,i){var nx=rulerX+np*rulerW;ctx.fillStyle='rgba(145,213,231,.5)';ctx.font='bold 15px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText(numLabels[i]+' cm',nx,rulerY+rulerH+22);ctx.textAlign='start'});
-                if(scanPhase<4){
-                    var targetX=rulerX+numPositions[scanPhase]*rulerW;
-                    if(phaseState==='scanning'){
-                        var scanElapsed=Date.now()-phaseStartTime;
-                        var scanProg=Math.min(scanElapsed/scanDuration,1);
-                        var easeP=scanProg<.5?2*scanProg*scanProg:1-Math.pow(-2*scanProg+2,2)/2;
-                        var prevX=scanPhase>0?rulerX+numPositions[scanPhase-1]*rulerW:rulerX;
-                        scanPos=prevX+(targetX-prevX)*easeP;
-                        ctx.save();ctx.globalAlpha=.1;ctx.fillStyle='#22D3EE';ctx.fillRect(scanPos-50,rulerY-5,100,rulerH+10);ctx.restore();
-                        ctx.beginPath();ctx.moveTo(scanPos,rulerY-10);ctx.lineTo(scanPos,rulerY+rulerH+10);
-                        ctx.strokeStyle='rgba(34,212,238,.9)';ctx.lineWidth=3;ctx.stroke();
-                        ctx.shadowColor='rgba(34,212,238,.8)';ctx.shadowBlur=18;ctx.stroke();ctx.shadowBlur=0;
-                        ctx.beginPath();ctx.moveTo(scanPos,rulerY-10);ctx.lineTo(scanPos-7,rulerY-18);ctx.lineTo(scanPos+7,rulerY-18);ctx.closePath();ctx.fillStyle='rgba(34,212,238,.9)';ctx.fill();
-                        ctx.beginPath();ctx.moveTo(scanPos,rulerY+rulerH+10);ctx.lineTo(scanPos-7,rulerY+rulerH+18);ctx.lineTo(scanPos+7,rulerY+rulerH+18);ctx.closePath();ctx.fill();
-                        ctx.fillStyle='rgba(34,212,238,.6)';ctx.font='12px JetBrains Mono,monospace';ctx.textAlign='center';
-                        ctx.fillText('扫描中...',scanPos,rulerY+rulerH+38);ctx.textAlign='start';
-                        if(scanProg>=1){phaseState='recognizing';phaseStartTime=Date.now()}
-                    }else if(phaseState==='recognizing'){
-                        scanPos=targetX;
-                        var pauseElapsed=Date.now()-phaseStartTime;
-                        var pauseProg=Math.min(pauseElapsed/pauseDuration,1);
-                        ctx.save();ctx.globalAlpha=.15;ctx.fillStyle='#22D3EE';ctx.fillRect(scanPos-50,rulerY-5,100,rulerH+10);ctx.restore();
-                        ctx.beginPath();ctx.moveTo(scanPos,rulerY-10);ctx.lineTo(scanPos,rulerY+rulerH+10);
-                        ctx.strokeStyle='rgba(34,212,238,.9)';ctx.lineWidth=3;ctx.stroke();
-                        ctx.shadowColor='rgba(34,212,238,.8)';ctx.shadowBlur=22;ctx.stroke();ctx.shadowBlur=0;
-                        if(pauseProg>.2&&!ocrBoxes[scanPhase]){
-                            ocrBoxes[scanPhase]={alpha:0,label:numLabels[scanPhase],x:targetX};
-                            foundNums.push(numLabels[scanPhase]);
-                        }
-                        if(ocrBoxes[scanPhase])ocrBoxes[scanPhase].alpha=Math.min(1,ocrBoxes[scanPhase].alpha+.015);
-                        ctx.fillStyle='rgba(34,212,238,.7)';ctx.font='12px JetBrains Mono,monospace';ctx.textAlign='center';
-                        var dots='';for(var dd=0;dd<Math.floor(t*4)%4;dd++)dots+='.';
-                        ctx.fillText('OCR 识别中'+dots,scanPos,rulerY+rulerH+38);ctx.textAlign='start';
-                        if(pauseProg>=1){phaseState='scanning';phaseStartTime=Date.now();scanPhase++}
-                    }
-                }
-                ocrBoxes.forEach(function(box){if(!box)return;var a=box.alpha;ctx.fillStyle='rgba(34,212,238,'+a*.15+')';ctx.fillRect(box.x-35,rulerY-38,70,30);ctx.strokeStyle='rgba(34,212,238,'+a*.8+')';ctx.lineWidth=2;ctx.strokeRect(box.x-35,rulerY-38,70,30);ctx.fillStyle='rgba(34,212,238,'+a+')';ctx.font='bold 16px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText(box.label+' cm',box.x,rulerY-16);ctx.textAlign='start';if(a>.9){ctx.fillStyle='rgba(16,185,129,'+a*.6+')';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText('✓ 识别',box.x,rulerY+rulerH+50);ctx.textAlign='start'}});
-                ctx.fillStyle='rgba(51,176,229,.3)';ctx.font='13px JetBrains Mono,monospace';
-                ctx.fillText('模型: EasyOCR (CRAFT + CRNN)',rulerX,dh-55);
-                ctx.fillText('已识别: '+foundNums.length+' / '+numLabels.length+' 个刻度',rulerX,dh-35);
-                if(scanPhase>=4){
-                    _drawBg(ctx,dw,dh);
-                    particles.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(51,176,229,'+p.a*0.5+')';ctx.fill()});
-                    ctx.fillStyle='rgba(16,24,48,.95)';ctx.strokeStyle='rgba(16,185,129,.5)';ctx.lineWidth=2;
-                    ctx.beginPath();ctx.moveTo(rulerX+rr,rulerY);ctx.lineTo(rulerX+rulerW-rr,rulerY);ctx.arcTo(rulerX+rulerW,rulerY,rulerX+rulerW,rulerY+rr,rr);ctx.lineTo(rulerX+rulerW,rulerY+rulerH-rr);ctx.arcTo(rulerX+rulerW,rulerY+rulerH,rulerX+rulerW-rr,rulerY+rulerH,rr);ctx.lineTo(rulerX+rr,rulerY+rulerH);ctx.arcTo(rulerX,rulerY+rulerH,rulerX,rulerY+rulerH-rr,rr);ctx.lineTo(rulerX,rulerY+rr);ctx.arcTo(rulerX,rulerY,rulerX+rr,rulerY,rr);ctx.closePath();ctx.fill();ctx.stroke();
-                    for(var i=0;i<=100;i++){var tx=rulerX+(i/100)*rulerW;var isMajor=i%10===0;ctx.beginPath();ctx.moveTo(tx,rulerY+(isMajor?0:18));ctx.lineTo(tx,rulerY+rulerH-(isMajor?0:18));ctx.strokeStyle='rgba(16,185,129,'+(isMajor?.5:.2)+')';ctx.stroke()}
-                    ocrBoxes.forEach(function(box){ctx.fillStyle='rgba(16,185,129,.15)';ctx.fillRect(box.x-35,rulerY-38,70,30);ctx.strokeStyle='rgba(16,185,129,.8)';ctx.lineWidth=2;ctx.strokeRect(box.x-35,rulerY-38,70,30);ctx.fillStyle='rgba(16,185,129,1)';ctx.font='bold 16px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText(box.label+' cm',box.x,rulerY-16);ctx.textAlign='start'});
-                    ctx.fillStyle='rgba(16,185,129,.9)';ctx.font='bold 18px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText('✓ 标尺校准完成 — pixel→cm 映射已建立',dw/2,rulerY-50);ctx.textAlign='start';
-                    ctx.fillStyle='rgba(16,185,129,.6)';ctx.font='13px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText('slope = '+((numPositions[0]*rulerW/parseFloat(numLabels[0]))).toFixed(2)+' px/cm',dw/2,rulerY+rulerH+45);ctx.textAlign='start';
-                    setTimeout(function(){cv.classList.add('hidden');cb()},1200);return;
-                }
-                _animFrame=requestAnimationFrame(frame);
-            }
-            frame();
-        }
-
-        function drawWaveform(cb){
-            var cv=document.getElementById('vis-canvas'),ctx=cv.getContext('2d');
-            cv.classList.remove('hidden');
-            var dw=cv.width,dh=cv.height;
-            var particles=[];for(var i=0;i<15;i++)particles.push({x:Math.random()*dw,y:Math.random()*dh,r:Math.random()*1+.5,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,a:Math.random()*.2+.05});
-            var marginL=80,marginR=40,marginT=50,marginB=55;
-            var plotW=dw-marginL-marginR,plotH=dh-marginT-marginB;
-            var numPts=500;
-            function generateProfile(){var pts=[];for(var i=0;i<numPts;i++){var t=i/numPts;var v=15;v+=180*Math.exp(-Math.pow((t-.5)/.035,2));v+=90*Math.exp(-Math.pow((t-.365)/.02,2));v+=85*Math.exp(-Math.pow((t-.635)/.02,2));v+=35*Math.exp(-Math.pow((t-.29)/.014,2));v+=32*Math.exp(-Math.pow((t-.71)/.014,2));v+=15*Math.exp(-Math.pow((t-.24)/.009,2));v+=13*Math.exp(-Math.pow((t-.76)/.009,2));v+=Math.random()*4;pts.push(Math.max(0,v))}return pts}
-            var pts=generateProfile();
-            var maxVal=Math.max.apply(null,pts)*1.15;
-            var drawX=0,startTime=Date.now(),duration=5500;
-            var peakIdx=[Math.floor(numPts*.29),Math.floor(numPts*.365),Math.floor(numPts*.5),Math.floor(numPts*.635),Math.floor(numPts*.71)];
-            var peakLabels=['-2级','-1级','中央','+1级','+2级'];
-            var peakColors=['rgba(99,102,241,.8)','rgba(245,158,11,.9)','rgba(16,185,129,1)','rgba(245,158,11,.9)','rgba(99,102,241,.8)'];
-            function frame(){
-                var elapsed=Date.now()-startTime,t=elapsed/1000;
-                drawX=Math.min(Math.floor((elapsed/duration)*numPts),numPts);
-                ctx.clearRect(0,0,dw,dh);
-                _drawBg(ctx,dw,dh);
-                particles.forEach(function(p){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=dw;if(p.x>dw)p.x=0;if(p.y<0)p.y=dh;if(p.y>dh)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(51,176,229,'+p.a*0.5+')';ctx.fill()});
-                ctx.strokeStyle='rgba(51,176,229,.06)';ctx.lineWidth=1;
-                for(var gy=0;gy<=5;gy++){var yy=marginT+gy*(plotH/5);ctx.beginPath();ctx.moveTo(marginL,yy);ctx.lineTo(dw-marginR,yy);ctx.stroke()}
-                ctx.strokeStyle='rgba(51,176,229,.15)';ctx.lineWidth=1.5;
-                ctx.beginPath();ctx.moveTo(marginL,marginT);ctx.lineTo(marginL,dh-marginB);ctx.lineTo(dw-marginR,dh-marginB);ctx.stroke();
-                ctx.fillStyle='rgba(145,213,231,.4)';ctx.font='12px JetBrains Mono,monospace';
-                ctx.textAlign='center';ctx.fillText('像素位置 (px)',dw/2,dh-10);ctx.textAlign='start';
-                ctx.save();ctx.translate(16,dh/2);ctx.rotate(-Math.PI/2);ctx.fillText('灰度值 (a.u.)',0,0);ctx.textAlign='start';ctx.restore();
-                ctx.fillStyle='rgba(145,213,231,.3)';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='right';
-                for(var gi=0;gi<=4;gi++){var val=maxVal*(1-gi/4);ctx.fillText(Math.round(val),marginL-6,marginT+gi*plotH/4+4)}
-                ctx.textAlign='start';
-                ctx.fillStyle='rgba(51,176,229,.5)';ctx.font='bold 14px JetBrains Mono,monospace';
-                ctx.fillText('水平光强剖面提取',marginL,marginT-20);
-                if(drawX>1){
-                    ctx.beginPath();
-                    var x0=marginL,y0=marginT+(1-pts[0]/maxVal)*plotH;
-                    ctx.moveTo(x0,y0);
-                    for(var i=1;i<drawX;i++){
-                        var xi=marginL+(i/numPts)*plotW;
-                        var yi=marginT+(1-pts[i]/maxVal)*plotH;
-                        ctx.lineTo(xi,yi);
-                    }
-                    ctx.strokeStyle='rgba(51,176,229,.9)';ctx.lineWidth=2.5;ctx.stroke();
-                    ctx.shadowColor='rgba(51,176,229,.5)';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0;
-                    var lastXi=marginL+((drawX-1)/numPts)*plotW;
-                    ctx.lineTo(lastXi,dh-marginB);ctx.lineTo(marginL,dh-marginB);ctx.closePath();
-                    var grad=ctx.createLinearGradient(0,marginT,0,dh-marginB);
-                    grad.addColorStop(0,'rgba(51,176,229,.2)');grad.addColorStop(.5,'rgba(51,176,229,.06)');grad.addColorStop(1,'rgba(51,176,229,.01)');
-                    ctx.fillStyle=grad;ctx.fill();
-                    var cy=marginT+(1-pts[Math.min(drawX-1,pts.length-1)]/maxVal)*plotH;
-                    ctx.beginPath();ctx.arc(lastXi,cy,4,0,Math.PI*2);ctx.fillStyle='rgba(95,195,236,1)';ctx.fill();
-                    ctx.shadowColor='rgba(95,195,236,.8)';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
-                }
-                var pct=Math.min(Math.floor((elapsed/duration)*100),100);
-                ctx.fillStyle='rgba(145,213,231,.3)';ctx.font='12px JetBrains Mono,monospace';
-                ctx.fillText('提取进度: '+pct+'%',dw-marginR-120,marginT-20);
-                if(drawX>=numPts){
-                    peakIdx.forEach(function(pi,pidx){
-                        var px=marginL+(pi/numPts)*plotW;
-                        var py=marginT+(1-pts[pi]/maxVal)*plotH;
-                        if(py<marginT||py>dh-marginB)return;
-                        ctx.beginPath();ctx.moveTo(px,py-6);ctx.lineTo(px,marginT+8);
-                        ctx.strokeStyle='rgba(245,158,11,.3)';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
-                        ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);
-                        ctx.fillStyle=peakColors[pidx];ctx.fill();
-                        ctx.shadowColor=peakColors[pidx];ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
-                        ctx.fillStyle=peakColors[pidx];ctx.font='bold 13px JetBrains Mono,monospace';ctx.textAlign='center';
-                        ctx.fillText(peakLabels[pidx],px,marginT-6);ctx.textAlign='start';
-                    });
-                    ctx.fillStyle='rgba(16,185,129,.9)';ctx.font='bold 16px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText('✓ 光强剖面提取完成',dw/2,marginT-20);ctx.textAlign='start';
-                    setTimeout(function(){cv.classList.add('hidden');cb()},1000);
-                }else{_animFrame=requestAnimationFrame(frame)}
-            }
-            frame();
-        }
-
-        function drawNNWithProgress(cb){
-            var vis=document.getElementById('vis-nn');vis.classList.remove('hidden');
-            var cv=document.createElement('canvas');
-            cv.width=1400;cv.height=600;cv.style.cssText='width:100%;height:100%';
-            vis.innerHTML='';vis.appendChild(cv);
-            var ctx=cv.getContext('2d');
-            var dw=cv.width,dh=cv.height;
-            var layers=[1,5,7,7,5,3,1];
-            var nodes=[],layerSpacing=dw*.45/(layers.length+1),offsetX=dw*.08;
-            for(var l=0;l<layers.length;l++){
-                var layerNodes=[];var n=layers[l];var nodeSpacing=dh*.7/(n+1);
-                for(var ni=0;ni<n;ni++)layerNodes.push({x:offsetX+layerSpacing*(l+1),y:30+nodeSpacing*(ni+1),phase:Math.random()*Math.PI*2,baseR:3.5+Math.random()*1.5});
-                nodes.push(layerNodes);
-            }
-            _nnStartTime=Date.now();_nnEpoch=0;_nnTotal=0;_nnLoss=0;_nnBestLoss=0;_nnAnimDone=false;
-            var signalPulse=0,prevEpoch=0,_visualEpochFrac=0;
-            var sparkX=[],sparkY=[];
-            for(var i=0;i<200;i++){sparkX.push(i/200);sparkY.push(1.5*Math.exp(-i/30)+0.05+Math.random()*.03)}
-            function frame(){
-                var t=(Date.now()-_nnStartTime)*0.001;
-                ctx.clearRect(0,0,dw,dh);
-                _drawBg(ctx,dw,dh);
-                if(_nnEpoch!==prevEpoch){signalPulse=1;prevEpoch=_nnEpoch}
-                signalPulse*=.94;
-                var realFrac=_nnTotal>0?_nnEpoch/_nnTotal:0;
-                _visualEpochFrac+=(realFrac-_visualEpochFrac)*0.012;
-                if(realFrac>0&&_visualEpochFrac<0.001)_visualEpochFrac=0.001;
-                for(var l=0;l<nodes.length-1;l++){
-                    for(var a=0;a<nodes[l].length;a++){
-                        for(var b=0;b<nodes[l+1].length;b++){
-                            var na=nodes[l][a],nb=nodes[l+1][b];
-                            var base=.04,pulse=signalPulse*Math.sin(t*6+l*2+a+b)*.4;
-                            ctx.beginPath();ctx.moveTo(na.x,na.y);ctx.lineTo(nb.x,nb.y);
-                            ctx.strokeStyle='rgba(99,102,241,'+Math.max(0,base+pulse)+')';ctx.lineWidth=1;ctx.stroke();
-                            if(signalPulse>.15){
-                                var prog=((t*2.5+a*.2+b*.15)%1);
-                                var sx=na.x+(nb.x-na.x)*prog,sy=na.y+(nb.y-na.y)*prog;
-                                ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);
-                                ctx.fillStyle='rgba(255,200,50,'+signalPulse*.7+')';ctx.fill();
-                            }
-                        }
-                    }
-                }
-                for(var l=0;l<nodes.length;l++){
-                    var layerPulse=signalPulse*Math.sin(t*5+l)*.5;
-                    nodes[l].forEach(function(n){
-                        var pulse=Math.sin(t*2+n.phase)*1+layerPulse;
-                        var r=n.baseR+pulse;
-                        ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
-                        var glow=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3);
-                        glow.addColorStop(0,'rgba(51,176,229,'+(0.6+signalPulse*.4)+')');
-                        glow.addColorStop(.3,'rgba(99,102,241,'+(0.2+signalPulse*.2)+')');
-                        glow.addColorStop(.6,'rgba(124,58,237,'+(0.08+signalPulse*.12)+')');
-                        glow.addColorStop(1,'rgba(0,0,0,0)');
-                        ctx.fillStyle=glow;ctx.fill();
-                        ctx.beginPath();ctx.arc(n.x,n.y,r*.5,0,Math.PI*2);
-                        ctx.fillStyle='rgba(255,255,255,.8)';ctx.fill();
-                    });
-                }
-                ctx.fillStyle='rgba(51,176,229,.35)';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='center';
-                ctx.fillText('y',nodes[0][0].x,dh-10);
-                ctx.fillText('sin(·)',nodes[1][0].x,dh-10);
-                ctx.fillText('I (norm)',nodes[nodes.length-1][0].x,dh-10);
-                ctx.textAlign='start';
-                ctx.fillStyle='rgba(51,176,229,.4)';ctx.font='bold 12px JetBrains Mono,monospace';ctx.textAlign='center';
-                ctx.fillText('SIREN: sin(ω₀ · (Wx + b))',dw*.27,20);ctx.textAlign='start';
-                var px=dw*.50,py=20,pw=dw*.47,ph=_nnTotal>0?310:100;
-                ctx.fillStyle='rgba(8,16,32,.94)';ctx.strokeStyle='rgba(51,176,229,.2)';ctx.lineWidth=1.5;
-                ctx.beginPath();ctx.moveTo(px+10,py);ctx.lineTo(px+pw-10,py);ctx.arcTo(px+pw,py,px+pw,py+10,10);ctx.lineTo(px+pw,py+ph-10);ctx.arcTo(px+pw,py+ph,px+pw-10,py+ph,10);ctx.lineTo(px+10,py+ph);ctx.arcTo(px,py+ph,px,py+ph-10,10);ctx.lineTo(px,py+10);ctx.arcTo(px,py,px+10,py,10);ctx.closePath();ctx.fill();ctx.stroke();
-                ctx.fillStyle='rgba(245,158,11,1)';ctx.font='bold 20px JetBrains Mono,monospace';
-                ctx.fillText('SIREN Neural Network Training',px+18,py+32);
-                ctx.fillStyle='rgba(51,176,229,.3)';ctx.font='12px JetBrains Mono,monospace';
-                ctx.fillText('Sinusoidal Representation Networks — 500 epochs max',px+18,py+52);
-                if(_nnTotal>0){
-                    var pct=((_nnEpoch/_nnTotal)*100).toFixed(1);
-                    ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 16px JetBrains Mono,monospace';
-                    ctx.fillText('Epoch',px+18,py+85);
-                    ctx.fillStyle='rgba(51,176,229,1)';ctx.font='bold 24px JetBrains Mono,monospace';
-                    ctx.fillText(_nnEpoch+' / '+_nnTotal+'  ('+pct+'%)',px+100,py+86);
-                    ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 16px JetBrains Mono,monospace';
-                    ctx.fillText('Loss',px+18,py+125);
-                    ctx.fillStyle='rgba(245,158,11,1)';ctx.font='bold 24px JetBrains Mono,monospace';
-                    ctx.fillText(_nnLoss.toFixed(6),px+100,py+126);
-                    ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 16px JetBrains Mono,monospace';
-                    ctx.fillText('Best',px+18,py+165);
-                    ctx.fillStyle='rgba(16,185,129,1)';ctx.font='bold 24px JetBrains Mono,monospace';
-                    ctx.fillText(_nnBestLoss.toFixed(6),px+100,py+166);
-                    var pbw=pw-36,pbh=20,pbx=px+18,pby=py+184;
-                    ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(pbx,pby,pbw,pbh);
-                    var fillW=pbw*(_nnEpoch/_nnTotal);
-                    var barGrad=ctx.createLinearGradient(pbx,0,pbx+fillW,0);
-                    barGrad.addColorStop(0,'#33B0E5');barGrad.addColorStop(.5,'#6366F1');barGrad.addColorStop(1,'#7C3AED');
-                    ctx.fillStyle=barGrad;ctx.fillRect(pbx,pby,fillW,pbh);
-                    ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=1;ctx.strokeRect(pbx,pby,pbw,pbh);
-                    ctx.fillStyle='rgba(255,255,255,.6)';ctx.font='bold 13px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText(pct+'%',pbx+pbw/2,pby+15);ctx.textAlign='start';
-                    var miniX=px+18,miniY=py+218,miniW=pw-36,miniH=72;
-                    ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(miniX,miniY,miniW,miniH);
-                    ctx.strokeStyle='rgba(255,255,255,.08)';ctx.strokeRect(miniX,miniY,miniW,miniH);
-                    ctx.fillStyle='rgba(255,255,255,.35)';ctx.font='bold 11px JetBrains Mono,monospace';
-                    ctx.fillText('Loss Curve (实时)',miniX,miniY-5);
-                    ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
-                    for(var gi=1;gi<4;gi++){var gy=miniY+gi*(miniH/4);ctx.beginPath();ctx.moveTo(miniX,gy);ctx.lineTo(miniX+miniW,gy);ctx.stroke()}
-                    var sparkLen=Math.max(1,Math.floor(sparkX.length*_visualEpochFrac));
-                    ctx.beginPath();
-                    for(var i=0;i<sparkLen;i++){var sx=miniX+sparkX[i]*miniW,sy=miniY+miniH-sparkY[i]*miniH*.85;if(i===0)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy)}
-                    ctx.strokeStyle='rgba(245,158,11,.8)';ctx.lineWidth=2.5;ctx.stroke();
-                    if(sparkLen>1){
-                        var lastSx=miniX+sparkX[sparkLen-1]*miniW,lastSy=miniY+miniH-sparkY[sparkLen-1]*miniH*.85;
-                        ctx.beginPath();ctx.arc(lastSx,lastSy,4,0,Math.PI*2);ctx.fillStyle='rgba(245,158,11,1)';ctx.fill();
-                        ctx.shadowColor='rgba(245,158,11,.8)';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
-                    }
-                }else{
-                    ctx.fillStyle='rgba(51,176,229,.6)';ctx.font='18px JetBrains Mono,monospace';
-                    var dots='';for(var d=0;d<Math.floor(t*2)%4;d++)dots+='.';
-                    ctx.fillText('等待训练数据'+dots,px+18,py+80);
-                }
-                if(!_nnAnimDone){_animFrame=requestAnimationFrame(frame)}
-                else{vis.classList.add('hidden');if(cb)cb()}
-            }
-            frame();
-        }
-
-        function drawLossCurve(cb){
-            var cv=document.getElementById('vis-canvas'),ctx=cv.getContext('2d');
-            cv.classList.remove('hidden');
-            var dw=cv.width,dh=cv.height;
-            var particles=[];for(var i=0;i<12;i++)particles.push({x:Math.random()*dw,y:Math.random()*dh,r:Math.random()*1+.5,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,a:Math.random()*.2+.05});
-            var marginL=85,marginR=50,marginT=55,marginB=60;
-            var plotW=dw-marginL-marginR,plotH=dh-marginT-marginB;
-            var numPts=300;
-            var lossPoints=[];for(var i=0;i<numPts;i++){var t=i/numPts;lossPoints.push(2.8*Math.exp(-t*5.5)+0.04+Math.sin(t*45)*.02*Math.exp(-t*4)+Math.random()*.012)}
-            var maxLoss=lossPoints[0]*1.15,drawX=0;
-            var startTime=Date.now(),duration=6000;
-            var milestones=[{p:.25,label:'PINN 光滑约束生效',color:'rgba(99,102,241,.8)'},{p:.6,label:'对称性约束收敛',color:'rgba(245,158,11,.8)'},{p:.85,label:'损失稳定',color:'rgba(16,185,129,.9)'}];
-            var milestoneShown={};
-            function frame(){
-                var elapsed=Date.now()-startTime,t=elapsed/1000;
-                drawX=Math.min(Math.floor((elapsed/duration)*numPts),numPts);
-                ctx.clearRect(0,0,dw,dh);
-                _drawBg(ctx,dw,dh);
-                particles.forEach(function(p){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=dw;if(p.x>dw)p.x=0;if(p.y<0)p.y=dh;if(p.y>dh)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(51,176,229,'+p.a*0.5+')';ctx.fill()});
-                ctx.strokeStyle='rgba(51,176,229,.06)';ctx.lineWidth=1;
-                for(var gy=0;gy<=5;gy++){var yy=marginT+gy*(plotH/5);ctx.beginPath();ctx.moveTo(marginL,yy);ctx.lineTo(dw-marginR,yy);ctx.stroke()}
-                ctx.strokeStyle='rgba(51,176,229,.15)';ctx.lineWidth=1.5;
-                ctx.beginPath();ctx.moveTo(marginL,marginT);ctx.lineTo(marginL,dh-marginB);ctx.lineTo(dw-marginR,dh-marginB);ctx.stroke();
-                ctx.fillStyle='rgba(145,213,231,.4)';ctx.font='12px JetBrains Mono,monospace';
-                ctx.textAlign='center';ctx.fillText('Epoch',dw/2,dh-15);ctx.textAlign='start';
-                ctx.save();ctx.translate(18,dh/2);ctx.rotate(-Math.PI/2);ctx.fillStyle='rgba(145,213,231,.4)';ctx.font='12px JetBrains Mono,monospace';ctx.textAlign='center';ctx.fillText('Loss',0,0);ctx.textAlign='start';ctx.restore();
-                ctx.fillStyle='rgba(51,176,229,.5)';ctx.font='bold 15px JetBrains Mono,monospace';
-                ctx.fillText('MSE + PINN + Symmetry Loss',marginL+5,marginT-22);
-                var pct=Math.min(Math.floor((elapsed/duration)*100),100);
-                ctx.fillStyle='rgba(145,213,231,.35)';ctx.font='12px JetBrains Mono,monospace';ctx.textAlign='right';
-                ctx.fillText('优化进度: '+pct+'%',dw-marginR,marginT-22);ctx.textAlign='start';
-                for(var i=0;i<=4;i++){var yy=marginT+i*(plotH/4);var val=maxLoss*(1-i/4);ctx.fillStyle='rgba(145,213,231,.35)';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='right';ctx.fillText(val.toFixed(2),marginL-8,yy+4);ctx.textAlign='start'}
-                ctx.fillStyle='rgba(145,213,231,.25)';ctx.font='10px JetBrains Mono,monospace';ctx.textAlign='right';
-                for(var ei=0;ei<=4;ei++){var ex=marginL+ei*(plotW/4);ctx.fillText(Math.round(ei*250/4),ex,dh-marginB+18)}
-                ctx.textAlign='start';
-                if(drawX>0){
-                    ctx.beginPath();
-                    for(var i=0;i<drawX;i++){var x=marginL+(i/numPts)*plotW,y=marginT+(1-lossPoints[i]/maxLoss)*plotH;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
-                    ctx.strokeStyle='#F59E0B';ctx.lineWidth=2.5;ctx.stroke();
-                    ctx.shadowColor='rgba(245,158,11,.4)';ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;
-                    ctx.lineTo(marginL+((drawX-1)/numPts)*plotW,dh-marginB);ctx.lineTo(marginL,dh-marginB);ctx.closePath();
-                    var grad=ctx.createLinearGradient(0,marginT,0,dh-marginB);
-                    grad.addColorStop(0,'rgba(245,158,11,.15)');grad.addColorStop(.5,'rgba(245,158,11,.04)');grad.addColorStop(1,'rgba(245,158,11,0)');
-                    ctx.fillStyle=grad;ctx.fill();
-                    var lx=marginL+((drawX-1)/numPts)*plotW,ly=marginT+(1-lossPoints[drawX-1]/maxLoss)*plotH;
-                    ctx.beginPath();ctx.arc(lx,ly,5,0,Math.PI*2);ctx.fillStyle='#F59E0B';ctx.fill();
-                    ctx.shadowColor='rgba(245,158,11,.8)';ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
-                    ctx.fillStyle='rgba(16,24,48,.85)';ctx.fillRect(lx+8,ly-28,130,22);
-                    ctx.strokeStyle='rgba(245,158,11,.3)';ctx.strokeRect(lx+8,ly-28,130,22);
-                    ctx.fillStyle='rgba(245,158,11,.95)';ctx.font='bold 13px JetBrains Mono,monospace';
-                    ctx.fillText('Loss: '+lossPoints[drawX-1].toFixed(4),lx+14,ly-12);
-                    milestones.forEach(function(m){
-                        var mx=Math.floor(m.p*numPts);
-                        if(drawX>=mx&&!milestoneShown[m.p]){
-                            milestoneShown[m.p]=true;
-                        }
-                        if(milestoneShown[m.p]){
-                            var mxx=marginL+(mx/numPts)*plotW,mxy=marginT+(1-lossPoints[mx]/maxLoss)*plotH;
-                            ctx.beginPath();ctx.arc(mxx,mxy,5,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
-                            ctx.shadowColor=m.color;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
-                            ctx.strokeStyle=m.color;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(mxx,mxy+8);ctx.lineTo(mxx,dh-marginB);ctx.stroke();ctx.setLineDash([]);
-                            ctx.fillStyle='rgba(16,24,48,.8)';ctx.fillRect(mxx-55,mxy-28,110,18);
-                            ctx.fillStyle=m.color;ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='center';
-                            ctx.fillText(m.label,mxx,mxy-15);ctx.textAlign='start';
-                        }
-                    });
-                }
-                if(drawX>=numPts){
-                    ctx.fillStyle='rgba(16,185,129,1)';ctx.font='bold 18px JetBrains Mono,monospace';ctx.textAlign='center';
-                    ctx.fillText('✓ 损失收敛 — 亚像素精度达到',dw/2,marginT-22);ctx.textAlign='start';
-                    setTimeout(function(){cv.classList.add('hidden');cb()},1200);
-                }else{_animFrame=requestAnimationFrame(frame)}
-            }
-            frame();
-        }
-
-        function showResultAnimation(cb){
-            var vis=document.getElementById('vis-result');vis.classList.remove('hidden');
-            var h0el=document.getElementById('vis-h0-text');
-            var dx1el=document.getElementById('vis-dx1-text');
-            var dx2el=document.getElementById('vis-dx2-text');
-            h0el.textContent='';dx1el.textContent='';dx2el.textContent='';
-            h0el.style.opacity='0';dx1el.style.opacity='0';dx2el.style.opacity='0';
-            var fields=[{el:h0el,label:'H₀ = '},{el:dx1el,label:'Δx₁ = '},{el:dx2el,label:'Δx₂ = '}];
-            var charSet='0123456789.',fi=0;
-            function animateField(){
-                if(fi>=fields.length){setTimeout(function(){vis.classList.add('hidden');cb()},600);return}
-                var f=fields[fi];f.el.style.transition='opacity .5s';f.el.style.opacity='1';
-                var sc=0,maxSc=22;
-                function scramble(){
-                    if(sc<maxSc){
-                        var txt=f.label;for(var s=0;s<sc;s++)txt+='·';for(var r=sc;r<9;r++)txt+=charSet[Math.floor(Math.random()*charSet.length)];
-                        f.el.textContent=txt;sc++;setTimeout(scramble,70);
-                    }else{f.el.textContent=f.label+'■■■■■■■';fi++;setTimeout(animateField,400)}
-                }
-                setTimeout(scramble,300);
-            }
-            animateField();
-        }
-
-        function runStepAnim(idx,cb){
-            switch(idx){
-                case 0:drawImagePreprocess(cb);break;
-                case 1:drawRulerDetection(cb);break;
-                case 2:drawWaveform(cb);break;
-                case 3:drawNNWithProgress(cb);break;
-                case 4:drawLossCurve(cb);break;
-                case 5:showResultAnimation(cb);break;
-                default:cb();
-            }
-        }
-
-        function animateStepBar(idx,duration,cb){
-            var bar=document.getElementById('loading-bar');
-            var barStart=(idx/6)*95;
-            var barEnd=((idx+1)/6)*95;
-            var t0=Date.now();
-            function tick(){
-                var el=Date.now()-t0;
-                var p=Math.min(el/duration,1);
-                var ease=p*(2-p);
-                bar.style.width=(barStart+(barEnd-barStart)*ease)+'%';
-                if(p<1){_barFrame=requestAnimationFrame(tick)}
-                else if(cb)cb();
-            }
-            tick();
-        }
-
-        function setTrainProgress(epoch,total){
-            if(_barFrame){cancelAnimationFrame(_barFrame);_barFrame=null}
-            var bar=document.getElementById('loading-bar');
-            var barStart=(3/6)*95;
-            var barEnd=((4/6)*95);
-            var p=epoch/total;
-            bar.style.width=(barStart+(barEnd-barStart)*p)+'%';
-        }
-
-        function completeStepCard(idx){
-            var card=document.getElementById('pcard-'+idx),dot=document.getElementById('pdot-'+idx);
-            card.className='pipeline-card rounded-xl p-3 border border-transparent transition-all duration-500 relative overflow-hidden card-done';
-            dot.className='w-5 h-5 rounded-full bg-mint border-2 border-mint flex items-center justify-center flex-shrink-0 transition-all duration-500';
-            dot.querySelector('i').style.opacity='1';
-        }
-
-        var _nnStartTime=0;
-        var _nnEpoch=0,_nnTotal=0,_nnLoss=0,_nnBestLoss=0,_nnAnimDone=false;
-
-        function _startStep(stepData){
-            for(var i=0;i<stepData.step;i++)completeStepCard(i);
-            _currentStep=stepData.step;
-            _stepAnimDone=false;
-            _stepBackendDone=!!_backendDoneSteps[stepData.step];
-            activateCard(stepData.step);
-            if(stepData.message)document.getElementById('loading-hint').textContent=stepData.message;
-            runStepAnim(stepData.step,function(){
-                _stepAnimDone=true;
-                tryAdvance();
-            });
-            if(stepData.step!==3)animateStepBar(stepData.step,5000);
-        }
-
-        function handleStreamEvent(evt){
-            if(evt.event==='step'){
-                if(evt.data.status==='start'){
-                    if(_currentStep>=0&&!_stepAnimDone){
-                        _eventQueue.push(evt);
-                        return;
-                    }
-                    _startStep(evt.data);
-                }else if(evt.data.status==='done'){
-                    _backendDoneSteps[evt.data.step]=true;
-                    if(evt.data.step===_currentStep){
-                        _stepBackendDone=true;
-                        if(evt.data.step===3){
-                            _stepAnimDone=true;
-                            _nnAnimDone=true;
-                        }
-                        tryAdvance();
-                    }
-                }
-            }else if(evt.event==='train'){
-                _nnEpoch=evt.data.epoch;_nnTotal=evt.data.total;
-                _nnLoss=evt.data.loss;_nnBestLoss=evt.data.best_loss;
-                document.getElementById('loading-hint').textContent='SIREN 训练 epoch '+evt.data.epoch+'/'+evt.data.total+' | loss='+evt.data.loss.toFixed(6);
-                setTrainProgress(evt.data.epoch,evt.data.total);
-            }else if(evt.event==='result'){
-                onAnalysisResult(evt.data);
-            }else if(evt.event==='error'){
-                onAnalysisError(evt.data.message);
-            }
-        }
-
-        function _processQueue(){
-            while(_eventQueue.length>0){
-                var next=_eventQueue.shift();
-                if(next.event==='step'&&next.data.status==='start'){
-                    if(_currentStep>=0&&!_stepAnimDone){
-                        _eventQueue.unshift(next);
-                        return;
-                    }
-                    _startStep(next.data);
-                    return;
-                }
-                handleStreamEvent(next);
-            }
-        }
-
-        function tryAdvance(){
-            if(!_stepAnimDone||!_stepBackendDone)return;
-            if(_currentStep<0)return;
-            var step=_currentStep;
-            _currentStep=-1;
-            completeStepCard(step);
-            _processQueue();
-        }
-
-        function onAnalysisResult(d){
-            completeAllSteps();
-            setTimeout(function(){
-                loading.classList.add('hidden');
-                ['vis-canvas','vis-nn','vis-result'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('hidden')});
-                document.getElementById('active-visual').style.display='none';
-                if(d.success){
-                    if(d.data.H0!=null)document.getElementById('centralPeakHeight').textContent=d.data.H0.toFixed(4)+' cm';
-                    else document.getElementById('centralPeakHeight').textContent='N/A';
-                    document.getElementById('deltaX1').textContent=d.data.deltaX1!=null?(d.data.deltaX1.toFixed(4)+' cm'):'N/A';
-                    document.getElementById('deltaX2').textContent=d.data.deltaX2!=null?(d.data.deltaX2.toFixed(4)+' cm'):'N/A';
-                    document.getElementById('deltaXavg').textContent=d.data.avgDeltaX!=null?(d.data.avgDeltaX.toFixed(4)+' cm'):'N/A';
-                    if(d.data.grayImage)document.getElementById('grayImage').src=d.data.grayImage;
-                    if(d.data.intensityProfile)document.getElementById('intensityProfile').src=d.data.intensityProfile;
-                    results.classList.remove('hidden');document.getElementById('charts-section').classList.remove('hidden')
-                }else showError(d.error||d.message||'分析失败。')
-            },600);
-        }
-
-        function onAnalysisError(msg){
-            clearAllTimers();
-            loading.classList.add('hidden');
-            showError(msg||'分析失败，请重试。');
-        }
-
-        function startStreamingPipeline(){
-            resetPipeline();
-            loading.classList.remove('hidden');
-            _currentStep=-1;_stepAnimDone=false;_stepBackendDone=false;
-            _eventQueue=[];_backendDoneSteps={};
-            _nnEpoch=0;_nnTotal=0;_nnLoss=0;_nnBestLoss=0;_nnAnimDone=false;
-            _elapsedTimer=setInterval(function(){_elapsedSec+=0.1;document.getElementById('loading-elapsed').textContent=_elapsedSec.toFixed(1)+'s'},100);
-            var bs=atob(capturedDataUrl.split(',')[1]),ms=capturedDataUrl.split(',')[0].split(':')[1].split(';')[0],ab=new ArrayBuffer(bs.length),ia=new Uint8Array(ab);
-            for(var i=0;i<bs.length;i++)ia[i]=bs.charCodeAt(i);
-            var fd=new FormData();fd.append('images',new Blob([ab],{type:ms}),'capture.png');
-            _streamAbort=new AbortController();
-            fetch('/api/laser-diffraction-stream',{method:'POST',body:fd,signal:_streamAbort.signal})
-            .then(function(response){
-                if(!response.ok)throw new Error('HTTP '+response.status);
-                var reader=response.body.getReader();
-                _streamReader=reader;
-                var decoder=new TextDecoder();
-                var buf='';
-                function read(){
-                    reader.read().then(function(result){
-                        if(result.done){return}
-                        buf+=decoder.decode(result.value,{stream:true});
-                        var lines=buf.split('\n');
-                        buf=lines.pop();
-                        for(var i=0;i<lines.length;i++){
-                            var line=lines[i].trim();
-                            if(line){
-                                try{handleStreamEvent(JSON.parse(line))}catch(e){console.warn('parse error',e,line)}
-                            }
-                        }
-                        read();
-                    }).catch(function(e){
-                        if(e.name!=='AbortError'){console.error('stream read error',e);onAnalysisError('网络错误，请重试。')}
-                    });
-                }
-                read();
-            }).catch(function(err){
-                if(err.name!=='AbortError'){onAnalysisError('网络错误，请重试。');console.error(err)}
-            });
-        }
-
-        analyzeBtn.addEventListener('click',function(){
-            if(!capturedDataUrl){showError('请先拍摄或上传图片。');return}
-            error.classList.add('hidden');results.classList.add('hidden');
-            document.getElementById('charts-section').classList.add('hidden');
-            startStreamingPipeline();
-        });
-
-        function showError(m){errorMessage.textContent=m;error.classList.remove('hidden')}
-        function hideError(){error.classList.add('hidden')}
-
-        window.addEventListener('beforeunload',function(){if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}})
-    })();
-    </script>
-
-    <script>
-    document.addEventListener('DOMContentLoaded',function(){
-        var chatNavBtn=document.getElementById('chat-nav-btn'),chatExp=document.getElementById('chat-expanded'),
-            closeBtn=document.getElementById('close-btn'),chatMsgs=document.getElementById('chat-messages'),
-            chatIn=document.getElementById('chat-input'),sendBtn=document.getElementById('send-btn');
-        if(!chatNavBtn)return;
-        chatNavBtn.addEventListener('click',function(){chatExp.classList.toggle('hidden')});
-        closeBtn.addEventListener('click',function(){chatExp.classList.add('hidden')});
-        function sendMsg(){
-            var q=chatIn.value.trim();if(!q)return;
-            addMsg('user',q);chatIn.value='';
-            var lid=addMsg('assistant','<div class="flex gap-1.5"><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-2 h-2 bg-ocean-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div>');
-            fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})})
-            .then(function(r){return r.json()})
-            .then(function(d){document.getElementById(lid).remove();addMsg('assistant',d.answer)})
-            .catch(function(){document.getElementById(lid).remove();addMsg('assistant','网络错误，请重试。')})
-        }
-        function addMsg(role,html){
-            var id='m'+Date.now(),div=document.createElement('div');div.id=id;
-            if(role==='user'){div.className='flex justify-end mb-4';div.innerHTML='<div class="max-w-[80%]"><div class="gradient-cta rounded-2xl rounded-tr-sm p-3.5 text-white text-xs shadow-lg">'+html+'</div></div>'}
-            else{div.className='flex mb-4';div.innerHTML='<div class="w-7 h-7 rounded-full bg-ocean-100 flex-shrink-0 flex items-center justify-center"><i class="fa fa-robot text-ocean-500 text-xs"></i></div><div class="ml-3 max-w-[80%]"><div class="bg-white rounded-2xl rounded-tl-sm p-3.5 text-abyss-700 text-xs shadow-sm">'+html+'</div></div>'}
-            chatMsgs.appendChild(div);chatMsgs.scrollTop=chatMsgs.scrollHeight;return id
-        }
-        sendBtn.addEventListener('click',sendMsg);
-        chatIn.addEventListener('keypress',function(e){if(e.key==='Enter')sendMsg()});
-    });
-    </script>
-</body>
-</html>
+{% block page_scripts %}
+<script defer src="{{ url_for('static', filename='js/camera.js') }}?v=2"></script>
+<script defer src="{{ url_for('static', filename='js/pipeline_animation.js') }}?v=2"></script>
+<script defer src="{{ url_for('static', filename='js/analysis.js') }}?v=2"></script>
+{% endblock %}

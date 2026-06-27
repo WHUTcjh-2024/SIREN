@@ -1,0 +1,17 @@
+{% extends "base_dashboard.html" %}
+{% block title %}{{ module_title }}{% endblock %}
+{% block topbar_greeting %}{{ module_title }}{% endblock %}
+{% block topbar_sub %}{{ module_subtitle }}{% endblock %}
+
+{% block content %}
+<section class="app-card app-module-placeholder">
+    <div class="app-module-placeholder-icon"><i class="fa {{ module_icon }}"></i></div>
+    <h2 class="app-module-placeholder-title">{{ module_title }}</h2>
+    <p class="app-module-placeholder-desc">{{ module_subtitle }}</p>
+    <p class="app-module-placeholder-note">本模块页面已纳入导航，实验功能将在此接入。</p>
+    <div class="app-module-placeholder-actions">
+        <a href="/laser-diffraction" class="app-btn-outline js-experiment-link"><i class="fa fa-camera"></i> 静态图像采集</a>
+        <a href="/" class="app-btn-outline"><i class="fa fa-home"></i> 返回实验主页</a>
+    </div>
+</section>
+{% endblock %}

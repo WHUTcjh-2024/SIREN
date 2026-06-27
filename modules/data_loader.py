@@ -90,6 +90,54 @@ class DiffractionDataLoader:
             'full': self.gray_image
         }
     
+    def _choose_profile_direction(self, image: np.ndarray) -> str:
+        """
+        判断条纹走向：毛细波衍射常见为水平条纹（沿图像 y 方向取剖面）。
+        排除右侧标尺区域，避免把刻度误当作条纹。
+        """
+        from scipy.signal import find_peaks as fp
+        from scipy.ndimage import gaussian_filter1d as gf
+
+        height, width = image.shape
+        strip_w = max(int(width * 0.72), width // 2)
+        roi = image[:, :strip_w]
+
+        h_proj = np.mean(roi, axis=0).astype(np.float64)
+        v_proj = np.mean(roi, axis=1).astype(np.float64)
+        h_smooth = gf(h_proj, sigma=3)
+        v_smooth = gf(v_proj, sigma=3)
+
+        v_dist = max(20, height // 35)
+        h_dist = max(20, strip_w // 35)
+        v_prom = max(float(np.std(v_smooth)) * 0.15, 2.0)
+        h_prom = max(float(np.std(h_smooth)) * 0.15, 2.0)
+
+        v_peaks, _ = fp(v_smooth, distance=v_dist, prominence=v_prom)
+        h_peaks, _ = fp(h_smooth, distance=h_dist, prominence=h_prom)
+
+        print(
+            f"[调试] 方向检测 ROI宽={strip_w} — "
+            f"垂直峰:{len(v_peaks)} 水平峰:{len(h_peaks)} 图像:{height}x{width}"
+        )
+
+        if len(v_peaks) >= 3 and len(h_peaks) < 3:
+            return 'vertical'
+        if len(h_peaks) >= 3 and len(v_peaks) < 3:
+            return 'horizontal'
+        if len(v_peaks) >= 3 and len(h_peaks) >= 3:
+            if len(v_peaks) >= len(h_peaks):
+                return 'vertical'
+            return 'horizontal'
+        if len(v_peaks) >= 2 and len(h_peaks) < 2:
+            return 'vertical'
+        if len(h_peaks) >= 2 and len(v_peaks) < 2:
+            return 'horizontal'
+
+        v_std = float(np.std(v_smooth))
+        h_std = float(np.std(h_smooth))
+        print(f"[DEBUG] 峰数不足，比较投影起伏 V_std={v_std:.2f} H_std={h_std:.2f}")
+        return 'vertical' if v_std >= h_std * 0.85 else 'horizontal'
+
     def extract_horizontal_profile(self, image: np.ndarray = None,
                                    y_center: int = None) -> np.ndarray:
         if image is None:
@@ -97,42 +145,12 @@ class DiffractionDataLoader:
                 self.auto_crop_regions()
             image = self.diffraction_region
 
-        height, width = image.shape
-        from scipy.signal import find_peaks as fp
-        from scipy.ndimage import gaussian_filter1d as gf
-
-        # 计算投影
-        horizontal_proj = np.mean(image, axis=0)  
-        vertical_proj = np.mean(image, axis=1)     
-
-        # 平滑处理
-        h_smooth = gf(horizontal_proj, sigma=3)
-        v_smooth = gf(vertical_proj, sigma=3)
-
-        # 找峰值
-        h_peaks, _ = fp(h_smooth, distance=width//20, prominence=np.std(h_smooth)*0.5)
-        v_peaks, _ = fp(v_smooth, distance=height//20, prominence=np.std(v_smooth)*0.5)
-
-        print(f"[调试] 方向检测 - 水平投影峰值数:{len(h_peaks)}, 垂直投影峰值数:{len(v_peaks)}")
-        print(f"[调试] 图像尺寸: {height} x {width}")
-        if len(v_peaks) >= 3:
-            print(f"[DEBUG] Detected {len(v_peaks)} vertical peaks, using vertical profile")
+        direction = self._choose_profile_direction(image)
+        if direction == 'vertical':
+            print('[DEBUG] 使用垂直光强剖面（水平条纹 / 沿 y 寻峰）')
             return self._extract_vertical_profile(image)
-        elif len(h_peaks) >= 3:
-            print(f"[DEBUG] Detected {len(h_peaks)} horizontal peaks, using horizontal profile")
-            return self._extract_horizontal_classic(image)
-        else:
-            # 兜底方案：比较标准差
-            h_std = np.std(h_smooth)
-            v_std = np.std(v_smooth)
-            print(f"[DEBUG] Peaks < 3, using std dev: H_std={h_std:.2f}, V_std={v_std:.2f}")
-
-            if v_std > h_std * 1.1:
-                print("[DEBUG] Vertical std larger, using vertical profile")
-                return self._extract_vertical_profile(image)
-            else:
-                print("[DEBUG] Using classic horizontal profile")
-                return self._extract_horizontal_classic(image)
+        print('[DEBUG] 使用水平光强剖面（垂直条纹 / 沿 x 寻峰）')
+        return self._extract_horizontal_classic(image)
 
     def _extract_vertical_profile(self, image: np.ndarray) -> np.ndarray:
         """

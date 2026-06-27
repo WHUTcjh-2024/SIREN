@@ -1,0 +1,95 @@
+{% extends "base_dashboard.html" %}
+{% block title %}预习测验{% endblock %}
+{% block topbar_greeting %}预习测验{% endblock %}
+{% block topbar_sub %}实验前 · 理论准备 · 全部答对后进入正式实验{% endblock %}
+{% block app_body_class %} app-body--quiz{% endblock %}
+
+{% block head_quiz_check %}
+<script>window.__quizPassedThisPage=false;</script>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+    .quiz-page-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--app-muted);
+        margin-bottom: 16px;
+    }
+    .quiz-page-breadcrumb a {
+        color: var(--app-primary);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .quiz-page-breadcrumb a:hover {
+        text-decoration: underline;
+    }
+    .quiz-page-hero {
+        padding: 22px 26px;
+        margin-bottom: 18px;
+        background: linear-gradient(135deg, #fffbeb 0%, #fff 55%, #eff6ff 100%);
+        border: 1px solid #fde68a;
+        border-radius: var(--app-radius);
+        box-shadow: var(--app-shadow);
+    }
+    .quiz-page-hero h2 {
+        margin: 8px 0 6px;
+        font-size: 20px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .quiz-page-hero p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--app-muted);
+        line-height: 1.55;
+        max-width: 40em;
+    }
+    .quiz-page-foot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="quiz-page-breadcrumb" aria-label="面包屑">
+    <a href="/"><i class="fa fa-home"></i> 实验主页</a>
+    <i class="fa fa-angle-right" aria-hidden="true"></i>
+    <span>预习测验</span>
+</nav>
+
+<div class="quiz-page-hero">
+    <span class="home-section-tag">实验前</span>
+    <h2>预习测验</h2>
+    <p>完成下列 5 题并自检全部正确后，方可进入「图像采集」与「数据处理」。本页与实验主页、正式实验模块采用同一工作台主题。</p>
+</div>
+
+<div id="quiz-gate-banner" class="quiz-gate-banner{% if need_quiz %} is-visible{% endif %}">
+    <i class="fa fa-exclamation-triangle"></i> 请先完成测验并全部答对，再进入正式实验
+</div>
+
+{% include '_preview_quiz.html' %}
+
+<div class="quiz-page-foot">
+    <a href="/" class="app-btn-outline"><i class="fa fa-arrow-left"></i> 返回实验主页</a>
+    <a href="/laser-diffraction" class="js-experiment-link app-btn-primary"><i class="fa fa-arrow-right"></i> 进入图像采集</a>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    {% if need_quiz %}
+    var quizEl = document.getElementById('preview-quiz-module');
+    if (quizEl) {
+        quizEl.classList.remove('is-collapsed');
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

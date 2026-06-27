@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}实验工作台{% endblock %} · {{ competition.system_name_short|default(competition.sidebar_title) }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app_dashboard.css') }}?v=14">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/competition.css') }}?v=2">
+    {% block load_tailwind %}{% endblock %}
+    {% block head_libs %}{% endblock %}
+    {% block head_extra %}{% endblock %}
+    {% block head_quiz_check %}
+    <script>(function(){if(document.cookie.indexOf('demo_mode=1')!==-1){document.documentElement.classList.add('quiz-passed');return;}try{if(sessionStorage.getItem('preview_quiz_passed_session')==='1'){document.documentElement.classList.add('quiz-passed');}}catch(e){}})();</script>
+    {% endblock %}
+</head>
+<body class="app-dashboard">
+    <button type="button" class="app-sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单"><i class="fa fa-bars"></i></button>
+    <div class="app-layout">
+        <aside class="app-sidebar" id="app-sidebar" aria-label="主导航">
+            <a href="/" class="app-sidebar-brand" title="{{ competition.system_name }}">
+                <div class="app-sidebar-brand-icon"><i class="fa fa-tint"></i></div>
+                <div class="app-sidebar-brand-copy">
+                    <h1 class="app-sidebar-title">{{ competition.sidebar_title }}</h1>
+                    <p class="app-sidebar-meta">{{ competition.track_label }} · {{ competition.brand_line }}</p>
+                </div>
+            </a>
+            <nav class="app-nav" aria-label="实验导航">
+                <a href="/" class="app-nav-link app-nav-link--hub{% if active_nav|default('') == 'home' %} is-active{% endif %}" data-nav="home">
+                    <span class="app-nav-link-icon app-nav-link-icon--hub"><i class="fa fa-home"></i></span>
+                    <span class="app-nav-link-text">
+                        <strong>实验主页</strong>
+                        <small>总览 · 进度 · 实验记录</small>
+                    </span>
+                </a>
+
+                <p class="app-nav-group-label"><span>实验前</span></p>
+                <a href="/preview-quiz" class="app-nav-link app-nav-link--gate{% if active_nav|default('') == 'preview' %} is-active{% endif %}" data-nav="preview">
+                    <span class="app-nav-step app-nav-step--gate">测</span>
+                    <span class="app-nav-link-text">
+                        <strong>预习测验</strong>
+                        <small>进入正式实验前须完成</small>
+                    </span>
+                    <span class="app-nav-pill" id="sidebar-quiz-pill" hidden>待完成</span>
+                </a>
+
+                <p class="app-nav-group-label"><span>正式实验</span></p>
+                <div class="app-nav-experiment">
+                    <p class="app-nav-subgroup-label"><span>静态实验</span></p>
+                    <div class="app-nav-flow app-nav-flow--static">
+                        <a href="/laser-diffraction" class="app-nav-link app-nav-link--flow js-experiment-link{% if active_nav|default('') in ('static_capture', 'capture') %} is-active{% endif %}" data-nav="static-capture">
+                            <span class="app-nav-step">1</span>
+                            <span class="app-nav-link-text">
+                                <strong>静态图像采集</strong>
+                                <small>衍射图 · SIREN 读条纹</small>
+                            </span>
+                        </a>
+                        <a href="/data-processing" class="app-nav-link app-nav-link--flow js-experiment-link{% if active_nav|default('') in ('static_process', 'process') %} is-active{% endif %}" data-nav="static-process">
+                            <span class="app-nav-step">2</span>
+                            <span class="app-nav-link-text">
+                                <strong>静态实验数据处理</strong>
+                                <small>σ 计算 · 多组拟合</small>
+                            </span>
+                        </a>
+                    </div>
+                    <p class="app-nav-subgroup-label app-nav-subgroup-label--dynamic"><span>动态实验</span></p>
+                    <div class="app-nav-flow app-nav-flow--dynamic">
+                        <a href="/dynamic-video-capture" class="app-nav-link app-nav-link--flow app-nav-link--dynamic js-experiment-link{% if active_nav|default('') == 'dynamic_capture' %} is-active{% endif %}" data-nav="dynamic-capture">
+                            <span class="app-nav-step app-nav-step--dynamic">3</span>
+                            <span class="app-nav-link-text">
+                                <strong>动态图像采集</strong>
+                                <small>表面张力 σ · 变温衍射图</small>
+                            </span>
+                        </a>
+                        <a href="/dynamic-data-processing" class="app-nav-link app-nav-link--flow app-nav-link--dynamic js-experiment-link{% if active_nav|default('') == 'dynamic_process' %} is-active{% endif %}" data-nav="dynamic-process">
+                            <span class="app-nav-step app-nav-step--dynamic">4</span>
+                            <span class="app-nav-link-text">
+                                <strong>动态数据处理</strong>
+                                <small>σ–T 关系 · 拟合与对比</small>
+                            </span>
+                        </a>
+                    </div>
+                </div>
+
+                {% block sidebar_nav_extra %}{% endblock %}
+
+                <div class="app-nav-divider"></div>
+                <a href="javascript:void(0)" id="chat-nav-btn-sidebar" class="app-nav-link app-nav-link--assistant sidebar-chat-trigger" data-nav="assistant">
+                    <span class="app-nav-link-icon"><i class="fa fa-comments"></i></span>
+                    <span class="app-nav-link-text">
+                        <strong>智慧星</strong>
+                        <small>激励 · 陪伴 · 答疑</small>
+                    </span>
+                </a>
+            </nav>
+            <div class="app-sidebar-route" aria-hidden="true">
+                <span class="{% if active_nav|default('') == 'home' %}is-on{% endif %}" data-route-dot="home">主页</span>
+                <i class="fa fa-angle-right"></i>
+                <span data-route-dot="preview">测验</span>
+                <i class="fa fa-angle-right"></i>
+                <span class="{% if active_nav|default('') in ('static_capture', 'capture') %}is-on{% endif %}" data-route-dot="static-capture">静采</span>
+                <i class="fa fa-angle-right"></i>
+                <span class="{% if active_nav|default('') in ('static_process', 'process') %}is-on{% endif %}" data-route-dot="static-process">静处</span>
+                <i class="fa fa-angle-right"></i>
+                <span class="{% if active_nav|default('') == 'dynamic_capture' %}is-on{% endif %}" data-route-dot="dynamic-capture">动采</span>
+                <i class="fa fa-angle-right"></i>
+                <span class="{% if active_nav|default('') == 'dynamic_process' %}is-on{% endif %}" data-route-dot="dynamic-process">动处</span>
+            </div>
+            <div class="app-sidebar-deco">
+                <div class="app-sidebar-deco-inner">
+                    <div class="app-sidebar-tech-chips" aria-label="核心技术">
+                        <span>SIREN</span>
+                        <span>PINNs</span>
+                        <span>智慧星</span>
+                    </div>
+                    <p class="app-sidebar-deco-note">AI 读图辅助 · 人工复核留痕</p>
+                </div>
+            </div>
+        </aside>
+
+        <div class="app-main">
+            <header class="app-topbar">
+                <div class="app-topbar-greeting">
+                    {% block topbar_greeting %}实验工作台{% endblock %}
+                    <span>{% block topbar_sub %}{{ competition.track_label }} · {{ competition.brand_line }}{% endblock %}</span>
+                </div>
+                <div class="app-topbar-actions">
+                    {% block topbar_actions %}
+                    <button type="button" id="chat-nav-btn" class="app-btn-assistant" aria-label="打开智慧星">
+                        <i class="fa fa-comments"></i><span class="u-show-from-sm">智慧星</span>
+                    </button>
+                    <div class="app-user-pill">
+                        <div class="app-user-avatar app-user-avatar--ai">AI</div>
+                        <span class="app-user-name">{{ competition.operator_label }}</span>
+                    </div>
+                    {% endblock %}
+                </div>
+            </header>
+
+            <div class="app-body{% block app_body_class %}{% endblock %}">
+                <div class="app-content">
+                    {% block content %}{% endblock %}
+                </div>
+                {% block right_rail %}{% endblock %}
+            </div>
+
+            <footer class="app-footer">
+                <span>© {{ competition.year }} {{ competition.system_name_short }}{% if competition.institution %} · {{ competition.institution }}{% endif %}</span>
+                <div>
+                    <a href="/">实验主页</a>
+                    <a href="/preview-quiz">预习测验</a>
+                    <a href="/laser-diffraction">静态采集</a>
+                    <a href="/data-processing">静态处理</a>
+                    <a href="/dynamic-video-capture">动态图采</a>
+                    <a href="/dynamic-data-processing">动态处理</a>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    {% include '_ai_assistant.html' %}
+
+    <script defer src="{{ url_for('static', filename='js/experiment_session.js') }}?v=13"></script>
+    <script defer src="{{ url_for('static', filename='js/companion_motivation.js') }}?v=4"></script>
+    <script defer src="{{ url_for('static', filename='js/preview_quiz.js') }}?v=11"></script>
+    <script defer src="{{ url_for('static', filename='js/dashboard_init.js') }}?v=2"></script>
+    {% block page_scripts %}{% endblock %}
+</body>
+</html>

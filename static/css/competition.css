@@ -1,0 +1,46 @@
+/* ============================================================
+   competition.css — 竞赛/项目通用样式
+   ============================================================ */
+
+/* competition hero tag */
+.competition-hero-tag{
+  display:inline-flex;align-items:center;
+  padding:4px 12px;border-radius:8px;
+  font-size:11px;font-weight:700;
+  background:rgba(79,110,247,.1);color:var(--primary);
+  margin-bottom:12px;
+}
+
+/* innovation list */
+.competition-innovation-list{
+  display:flex;flex-direction:column;gap:6px;
+  margin:12px 0 0;
+}
+.competition-innovation-list li{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:13px;color:var(--text-secondary);line-height:1.5;
+}
+.competition-innovation-list li::before{
+  content:'✓';display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50px;flex-shrink:0;margin-top:1px;
+  background:rgba(16,185,129,.1);color:var(--success);
+  font-size:10px;font-weight:700;
+}
+
+/* formula KaTeX */
+.formula-katex-inline{
+  font-family:'JetBrains Mono',monospace;
+  font-style:italic;
+  font-size:.95em;
+}
+.formula-katex-display{
+  font-family:'JetBrains Mono',monospace;
+  font-style:italic;
+  text-align:center;
+  padding:12px 0;
+}
+.formula-katex-display--sm{font-size:.9em}
+
+/* capture rail */
+.capture-rail{width:var(--rail-w);flex-shrink:0;display:flex;flex-direction:column;gap:16px}
+@media(max-width:1200px){.capture-rail{display:none}}
