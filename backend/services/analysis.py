@@ -23,39 +23,35 @@ class DiffractionAnalysisService:
         self.settings = settings
 
     def analyse(self, image_path: Path, progress: ProgressCallback | None = None) -> dict:
-        # Heavy OCR/Torch dependencies are loaded only for an analysis request;
-        # health checks and Agent endpoints stay fast and independently usable.
-        from main import DiffractionAnalysisPipeline
+        # Heavy OCR/Torch dependencies are loaded only for an analysis request.
+        # The improved estimator uses a dimensionless SIREN coordinate and PINN
+        # regularisation centred on the optical axis.
+        from modules.high_precision import HighPrecisionDiffractionAnalyzer
 
         run_id = uuid.uuid4().hex
         run_dir = self.settings.output_dir / "runs" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
-        pipeline = DiffractionAnalysisPipeline(str(image_path), progress_callback=progress)
-        pipeline.run(save_dir=str(run_dir))
-        system = pipeline.system
-        peaks = system.three_peaks
-        if not peaks:
-            raise ValueError("未检测到有效衍射峰")
-
-        center_px = float(peaks["center"]["pixel"])
-        pos_px = float(peaks["pos"]["pixel"])
-        neg_px = float(peaks["neg"]["pixel"])
-        dx1_px, dx2_px = abs(pos_px - center_px), abs(center_px - neg_px)
-        mapping = system.ruler_mapping
-        if mapping:
-            slope = abs(float(mapping["slope"]))
-            h0 = float(mapping["slope"]) * center_px + float(mapping["intercept"])
-            dx1_cm, dx2_cm = slope * dx1_px, slope * dx2_px
-            px_per_cm = 1 / slope if slope > 1e-12 else None
-        else:
-            h0 = dx1_cm = dx2_cm = px_per_cm = None
+        measurement = HighPrecisionDiffractionAnalyzer().analyse(image_path, progress)
+        fitted = measurement["peaks"]
+        center_px = float(fitted.center)
+        neg_px = float(fitted.negative)
+        pos_px = float(fitted.positive)
+        dx_pos_px = float(fitted.positive_distance)
+        dx_neg_px = float(fitted.negative_distance)
+        peaks = {
+            "center": {"pixel": center_px},
+            "neg": {"pixel": neg_px},
+            "pos": {"pixel": pos_px},
+        }
 
         annotated = run_dir / "annotated.png"
         profile_image = run_dir / "intensity_profile.png"
         gray_image = run_dir / "gray_image.png"
-        self._annotate(image_path, annotated, peaks)
-        self._plot_profile(system.full_profile, system.x_coords, peaks, profile_image)
-        self._write_image(gray_image, system.gray_image)
+        self._annotate(image_path, annotated, peaks, measurement)
+        self._plot_profile(
+            measurement["profile"], np.arange(len(measurement["profile"])), peaks, profile_image
+        )
+        self._write_image(gray_image, cv2.cvtColor(measurement["image"], cv2.COLOR_BGR2GRAY))
         combined = run_dir / "combined_result.png"
         return {
             "grayImage": self._url(gray_image),
@@ -63,15 +59,29 @@ class DiffractionAnalysisService:
             "annotatedImage": self._url(annotated),
             "surface3d": None,
             "combinedImage": self._url(combined) if combined.exists() else None,
-            "H0": round(h0, 4) if h0 is not None else None,
-            "deltaX1": round(dx1_cm, 4) if dx1_cm is not None else None,
-            "deltaX2": round(dx2_cm, 4) if dx2_cm is not None else None,
-            "avgDeltaX": round((dx1_cm + dx2_cm) / 2, 4) if dx1_cm is not None else None,
-            "deltaX1_px": round(dx1_px, 2),
-            "deltaX2_px": round(dx2_px, 2),
-            "pxPerCm": round(px_per_cm, 2) if px_per_cm is not None else None,
+            "H0": round(float(measurement["centerHeightCm"]), 4),
+            # Δx1 is the lower-image (+1) order; Δx2 is the upper (-1) order.
+            "deltaX1": round(float(measurement["positiveDistanceCm"]), 4),
+            "deltaX2": round(float(measurement["negativeDistanceCm"]), 4),
+            "avgDeltaX": round(float(measurement["averageDistanceCm"]), 4),
+            "deltaX1_px": round(dx_pos_px, 3),
+            "deltaX2_px": round(dx_neg_px, 3),
+            "pxPerCm": round(float(measurement["pixelsPerCm"]), 4),
             "centerPx": round(center_px, 2),
-            "rulerMapping": {"slope": mapping["slope"], "intercept": mapping["intercept"]} if mapping else None,
+            "negativePeakPx": round(neg_px, 3),
+            "positivePeakPx": round(pos_px, 3),
+            "rulerMapping": {
+                "slope": float(measurement["rulerMapping"]["slope"]),
+                "intercept": float(measurement["rulerMapping"]["intercept"]),
+                "rSquared": float(measurement["rulerMapping"]["r_squared"]),
+                "anchors": measurement["rulerDetections"],
+                "rejectedAnchors": measurement["rejectedRulerDetections"],
+            },
+            "quality": {
+                "sirenFitRmse": round(float(measurement["sirenFitRmse"]), 6),
+                "calibrationRmseCm": round(float(measurement["calibrationRmseCm"]), 6),
+                "method": "dimensionless-siren-pinn-v2",
+            },
             "runId": run_id,
         }
 
@@ -102,18 +112,26 @@ class DiffractionAnalysisService:
             raise ValueError("图像编码失败")
         buffer.tofile(path)
 
-    def _annotate(self, source: Path, target: Path, peaks: dict) -> None:
+    def _annotate(self, source: Path, target: Path, peaks: dict, measurement: dict | None = None) -> None:
         raw = np.fromfile(source, dtype=np.uint8)
         image = cv2.imdecode(raw, cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("无法读取上传图像")
         colors = {"center": (0, 0, 255), "neg": (0, 210, 0), "pos": (0, 210, 0)}
         labels = {"center": "0", "neg": "-1", "pos": "+1"}
+        if measurement:
+            labels = {
+                "center": f"0  H0={measurement['centerHeightCm']:.4f}cm",
+                "neg": f"-1  dx={measurement['negativeDistanceCm']:.4f}cm",
+                "pos": f"+1  dx={measurement['positiveDistanceCm']:.4f}cm",
+            }
+        font_scale = max(0.55, image.shape[1] / 2200)
+        thickness = max(1, round(image.shape[1] / 900))
         for key in ("center", "neg", "pos"):
             y = int(round(float(peaks[key]["pixel"])))
             cv2.line(image, (0, y), (image.shape[1], y), colors[key], 2)
             cv2.putText(image, labels[key], (12, max(24, y - 8)), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, colors[key], 2, cv2.LINE_AA)
+                        font_scale, colors[key], thickness, cv2.LINE_AA)
         self._write_image(target, image)
 
     @staticmethod

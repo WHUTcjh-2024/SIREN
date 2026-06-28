@@ -45,8 +45,15 @@ def create_app() -> FastAPI:
         application.mount("/samples", StaticFiles(directory=sample_dir), name="sample-files")
     frontend_dist = ROOT_DIR / "frontend" / "dist"
     assets_dir = frontend_dist / "assets"
-    if assets_dir.exists():
-        application.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+    # Register the mount even when the frontend has not been built yet.  The
+    # dist directory may be created after the API starts during development;
+    # skipping the mount in that case makes asset requests fall through to the
+    # SPA route and return index.html as JavaScript/CSS.
+    application.mount(
+        "/assets",
+        StaticFiles(directory=assets_dir, check_dir=False),
+        name="frontend-assets",
+    )
 
     @application.get("/{path:path}", include_in_schema=False)
     async def vue_spa(path: str):

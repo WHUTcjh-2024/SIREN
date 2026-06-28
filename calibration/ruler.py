@@ -29,24 +29,17 @@ class RulerReader:
 
     @staticmethod
     def _extract_digits(text: str) -> str:
-        return ''.join(c for c in text if c.isdigit())
+        # OCR commonly confuses the engraved zero with O/Q and one with l/I.
+        normalized = text.strip().replace('O', '0').replace('o', '0').replace('Q', '0')
+        normalized = normalized.replace('I', '1').replace('l', '1').replace('|', '1')
+        return ''.join(c for c in normalized if c.isdigit())
 
     @staticmethod
     def _match_priority(text: str, target: int) -> int:
         cleaned = RulerReader._extract_digits(text)
         if cleaned == str(target):
             return 3
-        if target == 30 and cleaned in ('3O', '3o', '3Q', '30'):
-            return 2
-        if target == 20 and cleaned in ('2O', '2o', '2Q', 'Z0', '20'):
-            return 2
-        if target == 10 and cleaned in ('1O', '1o', '1Q', 'l0', '10'):
-            return 2
-        if target == 30 and cleaned == '3':
-            return 1
-        if target == 20 and cleaned == '2':
-            return 1
-        if target == 10 and cleaned == '1':
+        if cleaned == str(target // 10):
             return 1
         return 0
 
@@ -71,14 +64,25 @@ class RulerReader:
         gamma = np.power(rotated.astype(np.float32) / 255.0, 0.6) * 255.0
         gamma = gamma.astype(np.uint8)
 
+        # Small phone previews contain the same ruler but their digits are only
+        # a few pixels high. OCR enlarged variants as well and map boxes back to
+        # original-image coordinates. This preserves calibration across upload
+        # resolutions instead of silently dropping the ruler on low-res files.
         all_results = []
-        for img_pass, label in [(rotated, 'raw'), (enhanced, 'enhanced'), (gamma, 'gamma')]:
+        passes = [(rotated, 'raw', 1.0), (enhanced, 'enhanced', 1.0), (gamma, 'gamma', 1.0)]
+        if max(rotated.shape) < 1000:
+            scale = 3.0
+            for source, label in ((rotated, 'raw'), (enhanced, 'enhanced'), (gamma, 'gamma')):
+                enlarged = cv2.resize(source, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+                passes.append((enlarged, f'{label}_3x', scale))
+
+        for img_pass, label, scale in passes:
             results = self.reader.readtext(img_pass)
             for (bbox, text, conf) in results:
                 if conf < 0.05:
                     continue
-                cx_rot = float(np.mean([p[0] for p in bbox]))
-                cy_rot = float(np.mean([p[1] for p in bbox]))
+                cx_rot = float(np.mean([p[0] for p in bbox])) / scale
+                cy_rot = float(np.mean([p[1] for p in bbox])) / scale
                 orig_y = crop_h - 1 - int(round(cx_rot))
                 orig_x = crop_x + int(round(cy_rot))
                 if not (0 <= orig_y < h):
@@ -94,7 +98,7 @@ class RulerReader:
 
         best_match = {}
         for r in all_results:
-            for target in (30, 20, 10):
+            for target in (40, 30, 20, 10):
                 prio = self._match_priority(r['text'], target)
                 if prio > 0:
                     key = (target, r['text'].strip(), r['pass'])
@@ -104,7 +108,7 @@ class RulerReader:
 
         found = {}
         match_log = []
-        for target in (30, 20, 10):
+        for target in (40, 30, 20, 10):
             if target in best_match:
                 prio, r = best_match[target]
                 found[target] = {
@@ -121,8 +125,6 @@ class RulerReader:
         print(f"  [Ruler OCR] Matched: {', '.join(match_log)}")
 
         found = self._deduplicate(found)
-
-        valid_vals = [v for v in (30, 20, 10) if v in found]
 
         def _infer_missing(found, h):
             if 20 in found and 30 in found and 10 not in found:
@@ -228,19 +230,54 @@ class RulerReader:
     def build_ruler_mapping(detections: List[Dict]) -> Optional[Dict]:
         if len(detections) < 2:
             return None
-        pixels = np.array([d['orig_y'] for d in detections])
-        cms = np.array([d['value'] for d in detections])
-        slope, intercept = np.polyfit(pixels, cms, 1)
+        pixels = np.array([d['orig_y'] for d in detections], dtype=np.float64)
+        cms = np.array([d['value'] for d in detections], dtype=np.float64)
+
+        # Robustly reject a partial OCR label (for example the leading "3" of
+        # 30) when it is geometrically inconsistent with the other ruler marks.
+        # Candidate lines come from every anchor pair; the winning line has the
+        # most sub-centimetre inliers, then the smallest robust residual.
+        best_inliers = np.ones(len(detections), dtype=bool)
+        best_score = (-1, float('-inf'))
+        if len(detections) >= 3:
+            for i in range(len(detections) - 1):
+                for j in range(i + 1, len(detections)):
+                    if abs(pixels[j] - pixels[i]) < 1:
+                        continue
+                    candidate_slope = (cms[j] - cms[i]) / (pixels[j] - pixels[i])
+                    candidate_intercept = cms[i] - candidate_slope * pixels[i]
+                    residuals = np.abs(cms - (candidate_slope * pixels + candidate_intercept))
+                    inliers = residuals <= 0.45
+                    if inliers.sum() < 2:
+                        continue
+                    robust_error = float(np.mean(residuals[inliers]))
+                    confidence = sum(
+                        max(float(d.get('confidence', 0.0)), 0.0)
+                        for d, keep in zip(detections, inliers) if keep
+                    )
+                    score = (int(inliers.sum()), confidence - robust_error)
+                    if score > best_score:
+                        best_score = score
+                        best_inliers = inliers
+
+        inlier_pixels = pixels[best_inliers]
+        inlier_cms = cms[best_inliers]
+        slope, intercept = np.polyfit(inlier_pixels, inlier_cms, 1)
+        inlier_anchors = [d for d, keep in zip(detections, best_inliers) if keep]
+        rejected_anchors = [d for d, keep in zip(detections, best_inliers) if not keep]
         predicted = slope * pixels + intercept
-        ss_res = np.sum((cms - predicted) ** 2)
-        ss_tot = np.sum((cms - np.mean(cms)) ** 2)
+        inlier_predicted = slope * inlier_pixels + intercept
+        ss_res = np.sum((inlier_cms - inlier_predicted) ** 2)
+        ss_tot = np.sum((inlier_cms - np.mean(inlier_cms)) ** 2)
         r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
         return {
             'slope': slope,
             'intercept': intercept,
             'r_squared': r_squared,
-            'n_points': len(detections),
-            'anchors': detections,
+            'n_points': len(inlier_anchors),
+            'anchors': inlier_anchors,
+            'rejected_anchors': rejected_anchors,
+            'all_residuals_cm': (cms - predicted).tolist(),
         }
 
     @staticmethod

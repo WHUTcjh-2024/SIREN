@@ -33,7 +33,7 @@ function remove(index: number) { state.calculations.splice(index, 1) }
 </script>
 
 <template>
-  <div class="page processing-page">
+  <div class="app-body app-body--process"><div class="app-content"><div class="page processing-page vue-migrated-page">
     <!-- Page Header -->
     <section class="page-intro">
       <div>
@@ -186,5 +186,5 @@ function remove(index: number) { state.calculations.splice(index, 1) }
         </div>
       </article>
     </section>
-  </div>
+  </div></div></div>
 </template>

@@ -4,480 +4,93 @@ import { RouterLink } from 'vue-router'
 import { useExperiment } from '../composables/useExperiment'
 
 const { state } = useExperiment()
-const nextRoute = computed(() => !state.measurement ? '/laser-diffraction' : '/data-processing')
+const completed = computed(() => [state.quizPassed, !!state.measurement, state.calculations.length > 0, state.calculations.length > 1, state.progress >= 100].filter(Boolean).length)
+const percent = computed(() => Math.max(state.progress, completed.value * 20))
+const status = (done: boolean) => done ? '已完成' : '待完成'
+const exportReport = () => window.print()
 </script>
 
 <template>
-  <div class="page">
-    <!-- Breadcrumb -->
-    <div class="breadcrumb">
-      <span>实验主页</span>
-      <i class="fa fa-chevron-right" />
-      <span>静态实验 · 图像采集</span>
-      <i class="fa fa-chevron-right" />
-      <span>静态实验 · 数据处理</span>
-      <i class="fa fa-chevron-right" />
-      <span>知识库</span>
-    </div>
-
-    <!-- Warning Banner -->
-    <div class="warning-banner">
-      <i class="fa fa-exclamation-triangle" />
-      <span>实验前请确保激光器已预热至少15分钟，衍射图样清晰稳定。如有异常，请联系实验室管理员。</span>
-    </div>
-
-    <!-- Main Content Grid -->
-    <div class="home-grid">
-      <!-- Left Column - Main Content -->
-      <div class="home-main">
-        <!-- Title Card -->
-        <div class="card title-card">
-          <h2>基于SIREN与PINNs的液体表面张力高精度测量系统</h2>
-          <ul class="feature-list">
-            <li><i class="fa fa-check-circle" /> SIREN神经网络：连续可微的光场表示</li>
-            <li><i class="fa fa-check-circle" /> PINNs物理约束：波动方程深度约束</li>
-            <li><i class="fa fa-check-circle" /> AI实验助手：实验原理和误差分析问答</li>
-          </ul>
-          <div class="module-selector">
-            <span class="active">1/4</span>
-            <span>25%</span>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-          <RouterLink :to="nextRoute" class="primary">
-            <i class="fa fa-play" /> 开始实验
-          </RouterLink>
-          <RouterLink to="/laser-diffraction" class="secondary">
-            <i class="fa fa-camera" /> 图像采集
-          </RouterLink>
-          <RouterLink to="/data-processing" class="secondary">
-            <i class="fa fa-calculator" /> 数据处理
-          </RouterLink>
-          <button class="secondary">
-            <i class="fa fa-book" /> 知识库
-          </button>
-        </div>
-
-        <!-- Workflow Section -->
-        <div class="card workflow-card">
-          <div class="card-header">
-            <i class="fa fa-cogs" />
-            <span>精密工作流与核心方法</span>
-            <RouterLink to="/laser-diffraction" class="start-btn">
-              <i class="fa fa-play" /> 从头开始
-            </RouterLink>
-          </div>
-          <div class="workflow-steps">
-            <div class="step">
-              <i class="fa fa-camera step-icon" />
-              <span>图像采集</span>
-            </div>
-            <div class="step">
-              <i class="fa fa-brain step-icon" />
-              <span>SIREN 拟合</span>
-            </div>
-            <div class="step">
-              <i class="fa fa-search step-icon" />
-              <span>PINNs 约束</span>
-            </div>
-            <div class="step">
-              <i class="fa fa-chart-line step-icon" />
-              <span>数据分析</span>
-            </div>
-          </div>
-          <div class="workflow-formulas">
-            <div class="formula">
-              <span>Kelvin 公式</span>
-              <div>σ = ρ ω² / k³</div>
-            </div>
-            <div class="formula">
-              <span>衍射角差</span>
-              <div>δ = β − α</div>
-            </div>
-            <div class="formula">
-              <span>波数计算</span>
-              <div>k = (2π/λ₀)·sin(δ/2)·[...]</div>
-            </div>
-            <div class="formula">
-              <span>相对误差</span>
-              <div>E = |σ−σ₀|/σ₀ × 100%</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Core Knowledge -->
-        <div class="card knowledge-card">
-          <div class="card-header">
-            <i class="fa fa-lightbulb" />
-            <span>核心知识</span>
-          </div>
-          <div class="knowledge-grid">
-            <div class="knowledge-item">
-              <h4>SIREN 神经网络</h4>
-              <p>使用周期激活函数的神经网络，可精确拟合连续光场分布。</p>
-            </div>
-            <div class="knowledge-item">
-              <h4>PINNs 物理约束</h4>
-              <p>将物理方程作为损失函数约束，确保结果符合波动理论。</p>
-            </div>
-            <div class="knowledge-item">
-              <h4>亚像素定位</h4>
-              <p>通过神经网络拟合实现0.01像素级别的峰值定位精度。</p>
-            </div>
-            <div class="knowledge-item">
-              <h4>色散关系</h4>
-              <p>ω = a·k^(3/2)，拟合得到表面张力系数σ。</p>
-            </div>
-          </div>
-        </div>
+  <div class="app-body app-body--home app-body--home-fit">
+    <div class="app-content">
+      <div class="companion-home-strip" role="note">
+        <i class="fa fa-star" aria-hidden="true" />
+        <div><strong>智慧星 · 学习激励与情感陪伴</strong><span> 完成预习与实验各阶段后，将自动收到鼓励与学习建议；遇到困难或久未登录时也会主动关心你。点击右下角智慧星可查看消息。</span></div>
       </div>
-
-      <!-- Right Column - Sidebar -->
-      <div class="home-sidebar">
-        <!-- Experiment Progress -->
-        <div class="card progress-card">
-          <div class="card-header">
-            <i class="fa fa-tasks" />
-            <span>操作进度</span>
-          </div>
-          <div class="progress-list">
-            <div class="progress-item" :class="{ done: state.measurement }">
-              <i :class="state.measurement ? 'fa fa-check-circle' : 'fa fa-circle-o'" />
-              <span>图像采集</span>
-              <small>{{ state.measurement ? '已完成' : '待完成' }}</small>
-            </div>
-            <div class="progress-item" :class="{ done: state.calculations.length > 0 }">
-              <i :class="state.calculations.length > 0 ? 'fa fa-check-circle' : 'fa fa-circle-o'" />
-              <span>数据处理</span>
-              <small>{{ state.calculations.length > 0 ? '已完成' : '待完成' }}</small>
-            </div>
-            <div class="progress-item" :class="{ done: state.progress >= 100 }">
-              <i :class="state.progress >= 100 ? 'fa fa-check-circle' : 'fa fa-circle-o'" />
-              <span>实验完成</span>
-              <small>{{ state.progress >= 100 ? '已完成' : '待完成' }}</small>
+      <div class="home-center">
+        <section class="home-hero home-hero--fit">
+          <div class="home-hero-main">
+            <span class="competition-hero-tag home-hero-track-tag">AI + 物理实验 · 2026</span>
+            <h2 class="home-hero-title">基于SIREN与PINNs的液体表面张力系数AI高精度测量系统</h2>
+            <p class="home-hero-sub">SIREN 神经隐式场 · PINNs 物理约束 · 亚像素条纹分析</p>
+            <ul class="home-hero-points competition-innovation-list">
+              <li>SIREN 连续光强场亚像素寻峰</li>
+              <li>PINNs 物理约束保证表面张力 σ 一致性</li>
+              <li>人机协同：预习—采集—计算全流程可追溯</li>
+            </ul>
+            <p v-if="!state.quizPassed" class="home-hero-gate"><i class="fa fa-exclamation-circle" /> 须先完成 <RouterLink to="/preview-quiz">预习测验</RouterLink> 并全部答对</p>
+            <div class="home-hero-actions">
+              <RouterLink to="/laser-diffraction" class="app-btn-primary"><i class="fa fa-play" /> 开始实验</RouterLink>
+              <RouterLink to="/preview-quiz" class="app-btn-outline"><i class="fa fa-edit" /> 预习测验</RouterLink>
+              <RouterLink to="/data-processing" class="app-btn-outline"><i class="fa fa-calculator" /> 数据处理</RouterLink>
+              <button type="button" class="app-btn-outline" @click="exportReport"><i class="fa fa-download" /> 导出</button>
             </div>
           </div>
-          <div class="progress-bar">
-            <div :style="{ width: `${state.progress}%` }" />
+          <div class="home-hero-aside">
+            <div class="home-scene-frame">
+              <img :src="'/static/img/experiment-scene.png'" alt="激光衍射实验场景" width="480" height="270" />
+              <span class="home-scene-badge"><i class="fa fa-camera" /> 实验实拍</span>
+            </div>
+            <div class="home-hero-metrics">
+              <div class="home-metric"><span class="home-metric-val">{{ completed }}/5</span><span class="home-metric-label">已完成步骤</span></div>
+              <div class="home-metric"><span class="home-metric-val">{{ percent }}%</span><span class="home-metric-label">总进度</span></div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Recent Results -->
-        <div class="card results-card">
-          <div class="card-header">
-            <i class="fa fa-history" />
-            <span>最近结果</span>
+        <section class="home-workflow-full" aria-labelledby="workflow-heading">
+          <header class="home-workflow-head">
+            <div class="home-workflow-head-main"><div class="home-workflow-head-title-row"><span class="home-section-tag home-section-tag--flow">实验流程</span><h2 id="workflow-heading" class="home-workflow-full-title">精密工作流与核心方程</h2></div></div>
+            <RouterLink to="/laser-diffraction" class="home-workflow-cta"><i class="fa fa-play" /> 进入采集</RouterLink>
+          </header>
+          <div class="workflow-pipeline" role="list">
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-blue"><i class="fa fa-camera" /></span><span class="workflow-pipeline-num">01</span></div><h3>图像采集</h3><p>衍射图 + 标尺，SIREN / EasyOCR</p></article>
+            <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-indigo"><i class="fa fa-area-chart" /></span><span class="workflow-pipeline-num">02</span></div><h3>SIREN 拟合</h3><p>连续光强场 · 亚像素寻峰</p></article>
+            <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-violet"><i class="fa fa-shield" /></span><span class="workflow-pipeline-num">03</span></div><h3>PINNs 约束</h3><p>色散关系与对称性</p></article>
+            <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-emerald"><i class="fa fa-calculator" /></span><span class="workflow-pipeline-num">04</span></div><h3>σ 计算拟合</h3><p>Kelvin 公式 · 多组验证</p></article>
           </div>
-          <div v-if="state.measurement" class="result-item">
-            <span>中央峰高度 H₀</span>
-            <b>{{ state.measurement.H0?.toFixed(4) ?? '—' }} cm</b>
+          <div class="workflow-core-equations">
+            <h3 class="workflow-core-title">核心方程</h3>
+            <div class="workflow-equations-grid">
+              <div class="workflow-eq-item is-kelvin"><span class="workflow-eq-label">Kelvin</span><div class="formula-katex-display">σ = ρω² / k³</div></div>
+              <div class="workflow-eq-item is-delta"><span class="workflow-eq-label">衍射角差</span><div class="formula-katex-display">δ = β − α</div></div>
+              <div class="workflow-eq-item is-k"><span class="workflow-eq-label">波数 k</span><div class="formula-katex-display formula-katex-display--sm">k ∝ sin(δ/2) sin α</div></div>
+              <div class="workflow-eq-item is-error"><span class="workflow-eq-label">相对误差</span><div class="formula-katex-display formula-katex-display--sm">E = |σ−σ₀|/σ₀ × 100%</div></div>
+            </div>
           </div>
-          <div v-if="state.measurement" class="result-item">
-            <span>平均间距 Δx</span>
-            <b>{{ state.measurement.avgDeltaX?.toFixed(4) ?? '—' }} cm</b>
-          </div>
-          <div v-if="!state.measurement" class="empty-state">
-            <p>暂无测量结果</p>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card actions-card">
-          <div class="card-header">
-            <i class="fa fa-bolt" />
-            <span>快速操作</span>
-          </div>
-          <RouterLink to="/laser-diffraction" class="action-item">
-            <i class="fa fa-camera" />
-            <span>开始图像采集</span>
-          </RouterLink>
-          <RouterLink to="/data-processing" class="action-item">
-            <i class="fa fa-calculator" />
-            <span>数据处理计算</span>
-          </RouterLink>
-        </div>
+        </section>
       </div>
     </div>
 
-    <!-- Mascot -->
-    <div class="mascot">
-      <div class="mascot-character">
-        <i class="fa fa-user-graduate" />
+    <aside class="app-rail app-rail--home">
+      <div class="app-card rail-exp-card">
+        <div class="app-card-head"><span>我的实验</span></div>
+        <div class="rail-progress-block"><div class="rail-progress-top"><span class="rail-progress-label">实验总进度</span><strong class="rail-progress-pct">{{ percent }}%</strong></div><div class="app-progress rail-progress-bar-wrap"><div class="app-progress-bar" :style="{ width: `${percent}%` }" /></div></div>
+        <div class="rail-exp-list">
+          <RouterLink to="/preview-quiz" class="rail-exp-item"><div class="rail-exp-thumb is-blue"><i class="fa fa-book" /></div><div class="rail-exp-body"><h4>预习测验</h4><p>实验前 · 5 题（单选 / 多选 / 判断）</p></div><span class="app-badge" :class="state.quizPassed ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.quizPassed) }}</span></RouterLink>
+          <RouterLink to="/laser-diffraction" class="rail-exp-item"><div class="rail-exp-thumb is-blue"><i class="fa fa-video-camera" /></div><div class="rail-exp-body"><h4>激光衍射图像采集</h4><p>SIREN 条纹定位 · 输出 H₀、Δx</p></div><span class="app-badge" :class="state.measurement ? 'app-badge-green' : 'app-badge-amber'">{{ status(!!state.measurement) }}</span></RouterLink>
+          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-violet"><i class="fa fa-calculator" /></div><div class="rail-exp-body"><h4>表面张力计算</h4><p>σ = ρω²/k³ · 可导入采集结果</p></div><span class="app-badge" :class="state.calculations.length ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 0) }}</span></RouterLink>
+          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-green"><i class="fa fa-line-chart" /></div><div class="rail-exp-body"><h4>多组数据拟合</h4><p>ω = a · k³⁄² · 验证 σ</p></div><span class="app-badge" :class="state.calculations.length > 1 ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 1) }}</span></RouterLink>
+        </div>
+        <div class="rail-exp-footer"><RouterLink to="/laser-diffraction" class="app-btn-primary rail-cta-btn"><i class="fa fa-arrow-right" /> 继续实验</RouterLink></div>
       </div>
-    </div>
+      <div class="rail-bottom-row">
+        <div class="app-card"><div class="app-card-head">实验记录</div><div class="app-card-body rail-log-body"><ul class="app-rail-list"><li v-if="!completed"><span>暂无记录</span></li><li v-if="state.quizPassed"><span>预习测验已通过</span><span class="app-status-ok">完成</span></li><li v-if="state.measurement"><span>图像分析已完成</span><span class="app-status-ok">完成</span></li></ul></div></div>
+        <div class="app-card"><div class="app-card-head">系统状态</div><div class="app-card-body"><ul class="app-rail-list"><li><span>分析引擎</span><span class="app-status-ok">正常</span></li><li><span>预习测验</span><span :class="state.quizPassed ? 'app-status-ok' : 'app-status-warn'">{{ state.quizPassed ? '已通过' : '未完成' }}</span></li><li><span>智慧星</span><span class="app-status-ok">激励 · 陪伴 · RAG</span></li></ul></div></div>
+      </div>
+    </aside>
   </div>
 </template>
-
-<style scoped>
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #718096;
-  margin-bottom: 16px;
-}
-.breadcrumb i { font-size: 8px; color: #cbd5e0; }
-.breadcrumb span:last-child { color: #5b5ce2; font-weight: 600; }
-
-.warning-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #92400e;
-  margin-bottom: 20px;
-}
-.warning-banner i { color: #f59e0b; }
-
-.home-grid {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 20px;
-}
-
-.home-main {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.home-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.title-card {
-  padding: 24px;
-}
-.title-card h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #172033;
-  margin: 0 0 16px;
-  line-height: 1.4;
-}
-.feature-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 16px;
-}
-.feature-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #4a5568;
-  margin-bottom: 8px;
-}
-.feature-list li i {
-  color: #10b981;
-  font-size: 14px;
-}
-.module-selector {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #718096;
-}
-.module-selector .active {
-  color: #5b5ce2;
-  font-weight: 700;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.workflow-card, .knowledge-card, .progress-card, .results-card, .actions-card {
-  padding: 20px;
-}
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #172033;
-}
-.card-header i { color: #5b5ce2; }
-.start-btn {
-  margin-left: auto;
-  font-size: 12px;
-  color: #5b5ce2;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.workflow-steps {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 8px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #4a5568;
-}
-.step-icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #5b5ce2, #7c3aed);
-  color: white;
-  border-radius: 10px;
-  font-size: 16px;
-}
-
-.workflow-formulas {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-.formula {
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 12px;
-}
-.formula span {
-  display: block;
-  color: #718096;
-  margin-bottom: 6px;
-  font-weight: 600;
-}
-.formula div {
-  font-family: 'JetBrains Mono', monospace;
-  color: #172033;
-  font-size: 13px;
-}
-
-.knowledge-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-.knowledge-item {
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-.knowledge-item h4 {
-  font-size: 13px;
-  font-weight: 700;
-  color: #172033;
-  margin: 0 0 8px;
-}
-.knowledge-item p {
-  font-size: 12px;
-  color: #718096;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.progress-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: #4a5568;
-}
-.progress-item i { font-size: 16px; color: #cbd5e0; }
-.progress-item.done i { color: #10b981; }
-.progress-item small {
-  margin-left: auto;
-  font-size: 11px;
-  color: #718096;
-}
-
-.progress-bar {
-  height: 6px;
-  background: #e2e8f0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-.progress-bar div {
-  height: 100%;
-  background: linear-gradient(90deg, #5b5ce2, #18a9b8);
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
-.result-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 12px;
-}
-.result-item span { color: #718096; }
-.result-item b { color: #172033; font-weight: 600; }
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #a0aec0;
-  font-size: 13px;
-}
-
-.action-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  text-decoration: none;
-  color: #4a5568;
-  font-size: 13px;
-  margin-bottom: 8px;
-  transition: all 0.2s;
-}
-.action-item:hover {
-  background: #edf2f7;
-  color: #5b5ce2;
-}
-.action-item i { color: #5b5ce2; }
-
-.mascot {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 100;
-}
-.mascot-character {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #5b5ce2, #7c3aed);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: white;
-  font-size: 24px;
-  box-shadow: 0 4px 20px rgba(91, 92, 226, 0.3);
-}
-</style>

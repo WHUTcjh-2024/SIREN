@@ -6,6 +6,13 @@ export interface Measurement {
   deltaX1: number | null
   deltaX2: number | null
   avgDeltaX: number | null
+  deltaX1_px?: number | null
+  deltaX2_px?: number | null
+  centerPx?: number | null
+  negativePeakPx?: number | null
+  positivePeakPx?: number | null
+  pxPerCm?: number | null
+  quality?: { sirenFitRmse?: number; calibrationRmseCm?: number; method?: string }
   annotatedImage?: string | null
   intensityProfile?: string | null
   grayImage?: string | null
