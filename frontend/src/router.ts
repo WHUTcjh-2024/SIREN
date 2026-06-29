@@ -4,10 +4,12 @@ import CaptureView from './views/CaptureView.vue'
 import ProcessingView from './views/ProcessingView.vue'
 import QuizView from './views/QuizView.vue'
 import PlaceholderView from './views/PlaceholderView.vue'
+import TeacherDashboardView from './views/TeacherDashboardView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/teacher', name: 'teacher-dashboard', component: TeacherDashboardView, meta: { title: '教学数据驾驶舱', layout: 'teacher' } },
     { path: '/', name: 'home', component: HomeView, meta: { title: '实验主页', subtitle: 'AI + 物理实验 · 预习测验 → 静态实验 → 动态实验' } },
     { path: '/preview-quiz', name: 'quiz', component: QuizView, meta: { title: '预习测验', subtitle: '实验前置学习 · 全部答对后进入正式实验' } },
     { path: '/laser-diffraction', name: 'capture', component: CaptureView, meta: { title: '静态图像采集', subtitle: 'SIREN 连续光场 · EasyOCR 标尺识别 · 亚像素寻峰' } },
