@@ -3,248 +3,196 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 type ClassKey = 'all' | 'class1' | 'class2'
 type ExperimentKey = 'surface' | 'diffraction'
-type Student = {
-  id: string
-  name: string
-  className: string
-  quiz: number
-  wrong: number
-  questions: number
-  risk: 'high' | 'medium'
-  issue: string
-  lastActive: string
-}
 
 const selectedClass = ref<ClassKey>('all')
 const selectedExperiment = ref<ExperimentKey>('surface')
-const range = ref('近 7 天')
-const toast = ref('')
-const search = ref('')
 const isLive = ref(true)
 const now = ref(new Date())
-const liveConversationDelta = ref(0)
-const activeNow = ref(37)
-const requestsPerMinute = ref(8.6)
-const anomalyCount = ref(3)
-const activitySeries = ref([28, 34, 31, 42, 39, 48, 53, 49, 58, 62, 57, 66])
-const liveEvents = ref([
-  { time: '刚刚', type: 'question', title: '新增概念疑惑', detail: '物理 2402 · 衍射角与条纹间距', tone: 'orange' },
-  { time: '1 分钟前', type: 'quiz', title: '预习测验已提交', detail: '物理 2401 · 正确率 80%', tone: 'blue' },
-  { time: '3 分钟前', type: 'risk', title: '学习风险变化', detail: '1 名学生由中风险转为低风险', tone: 'green' },
-  { time: '5 分钟前', type: 'ai', title: '智慧星完成解答', detail: '有效数字与误差传递', tone: 'violet' },
-])
+const activeStudents = ref(37)
+const aiRate = ref(8.6)
+const conversationDelta = ref(0)
+const pulse = ref([26, 31, 28, 38, 44, 40, 52, 47, 58, 62, 55, 66, 61, 70])
+const questionCursor = ref(0)
+const eventCursor = ref(0)
+const updateVersion = ref(0)
 
-const eventPool = [
-  { type: 'question', title: '新增概念疑惑', detail: '物理 2402 · Kelvin 公式参数含义', tone: 'orange' },
-  { type: 'quiz', title: '预习测验已提交', detail: '物理 2401 · 正确率 80%', tone: 'blue' },
-  { type: 'ai', title: '智慧星完成解答', detail: '物理 2402 · SIREN 拟合判读', tone: 'violet' },
-  { type: 'risk', title: '学习风险变化', detail: '1 名学生进入重点关注队列', tone: 'red' },
-]
-
-const classFactor = computed(() => selectedClass.value === 'class1' ? 1.04 : selectedClass.value === 'class2' ? 0.94 : 1)
-const experimentFactor = computed(() => selectedExperiment.value === 'surface' ? 1 : 0.91)
-const eligibleStudents = computed(() => selectedClass.value === 'all' ? 86 : 43)
-const students = computed(() => Math.round((selectedClass.value === 'all' ? 86 : 43) * experimentFactor.value))
-const completion = computed(() => Math.min(99, Math.round(88 * classFactor.value * experimentFactor.value)))
-const accuracy = computed(() => Math.min(96, Math.round(76 * classFactor.value * experimentFactor.value)))
-const conversations = computed(() => Math.round(students.value * 2.14 * (selectedExperiment.value === 'surface' ? 1 : 1.08)) + liveConversationDelta.value)
-const helpNeeded = computed(() => Math.max(3, Math.round(students.value * (selectedClass.value === 'class2' ? .19 : .13))))
-const readiness = computed(() => Math.round(completion.value * .48 + accuracy.value * .42 + Math.min(100, activeNow.value / Math.max(1, students.value) * 100) * .1))
-const updatedAt = computed(() => now.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
-const pulseMax = computed(() => Math.max(...activitySeries.value, 1))
-
-const trend = computed(() => {
-  const base = selectedExperiment.value === 'surface' ? [58, 63, 65, 69, 72, 74, 76] : [51, 56, 61, 60, 66, 68, 70]
-  return base.map(value => Math.min(98, Math.round(value * classFactor.value)))
-})
-const linePoints = computed(() => trend.value.map((value, index) => `${28 + index * 72},${160 - (value - 45) * 3}`).join(' '))
+const classFactor = computed(() => selectedClass.value === 'class1' ? 1.04 : selectedClass.value === 'class2' ? .94 : 1)
+const eligible = computed(() => selectedClass.value === 'all' ? 86 : 43)
+const completion = computed(() => Math.min(97, Math.round(88 * classFactor.value)))
+const accuracy = computed(() => Math.min(95, Math.round((selectedExperiment.value === 'surface' ? 76 : 71) * classFactor.value)))
+const conversations = computed(() => Math.round(184 * eligible.value / 86) + conversationDelta.value)
+const focusStudents = computed(() => selectedClass.value === 'all' ? 11 : selectedClass.value === 'class2' ? 7 : 4)
+const readiness = computed(() => Math.round(completion.value * .48 + accuracy.value * .42 + activeStudents.value / eligible.value * 10))
+const pulseMax = computed(() => Math.max(...pulse.value, 1))
+const clock = computed(() => now.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
 
 const misconceptions = computed(() => selectedExperiment.value === 'surface' ? [
-  { title: '衍射角与条纹间距的关系', count: 31, wrong: 42, tone: 'orange', note: '混淆角度增大与条纹疏密变化' },
-  { title: 'Kelvin 公式参数含义', count: 24, wrong: 35, tone: 'blue', note: '对波长 λ 与波数 k 的换算不熟悉' },
-  { title: '有效数字与误差传递', count: 18, wrong: 28, tone: 'violet', note: '计算结果保留位数不一致' },
-  { title: 'SIREN 拟合结果判读', count: 13, wrong: 19, tone: 'green', note: '无法区分拟合误差与实验误差' },
+  { name: '衍射角与条纹间距', questions: 31, wrong: 42, detail: '角度变化与条纹疏密关系混淆' },
+  { name: 'Kelvin 公式参数含义', questions: 24, wrong: 35, detail: '波长 λ、波数 k 的换算不熟练' },
+  { name: '有效数字与误差传递', questions: 18, wrong: 28, detail: '结果保留位数与不确定度不一致' },
 ] : [
-  { title: '光栅方程适用条件', count: 28, wrong: 39, tone: 'orange', note: '将主极大条件用于单缝衍射' },
-  { title: '级次与衍射角关系', count: 23, wrong: 34, tone: 'blue', note: '忽略可观察最高级次约束' },
-  { title: '测量不确定度合成', count: 16, wrong: 26, tone: 'violet', note: 'A、B 类不确定度混淆' },
-  { title: '数据线性化处理', count: 11, wrong: 17, tone: 'green', note: '斜率物理意义判断错误' },
+  { name: '光栅方程适用条件', questions: 28, wrong: 39, detail: '主极大条件与单缝衍射混淆' },
+  { name: '级次与衍射角关系', questions: 23, wrong: 34, detail: '忽略可观察最高级次约束' },
+  { name: '测量不确定度合成', questions: 16, wrong: 26, detail: 'A、B 类不确定度混淆' },
 ])
 
-const studentRows: Student[] = [
-  { id: '20260127', name: '陈雨欣', className: '物理 2402', quiz: 48, wrong: 4, questions: 9, risk: 'high', issue: '衍射角定义、公式选择', lastActive: '10 分钟前' },
-  { id: '20260053', name: '周子航', className: '物理 2401', quiz: 56, wrong: 3, questions: 7, risk: 'high', issue: '波数换算、单位处理', lastActive: '32 分钟前' },
-  { id: '20260115', name: '宋嘉宁', className: '物理 2402', quiz: 64, wrong: 3, questions: 6, risk: 'medium', issue: '有效数字、误差传递', lastActive: '1 小时前' },
-  { id: '20260031', name: '林浩然', className: '物理 2401', quiz: 68, wrong: 2, questions: 5, risk: 'medium', issue: '拟合曲线物理意义', lastActive: '2 小时前' },
+const questionPool = [
+  { text: '为什么衍射角变大以后，屏幕上的条纹反而更疏了？', tag: '概念理解', className: '物理 2402' },
+  { text: '波数 k 是直接用 2π/λ 吗？单位需要换成米吗？', tag: '公式应用', className: '物理 2401' },
+  { text: '拟合曲线很平滑，就能说明实验结果一定准确吗？', tag: '结果判读', className: '物理 2402' },
+  { text: '相对误差和不确定度在实验报告里应该分别怎么写？', tag: '误差分析', className: '物理 2401' },
 ]
-
-const filteredStudents = computed(() => studentRows.filter(student => {
-  const matchesClass = selectedClass.value === 'all' || (selectedClass.value === 'class1' ? student.className.endsWith('2401') : student.className.endsWith('2402'))
-  const term = search.value.trim().toLowerCase()
-  return matchesClass && (!term || `${student.name}${student.id}${student.issue}`.toLowerCase().includes(term))
-}))
-
-function notify(message: string) {
-  toast.value = message
-  window.setTimeout(() => { toast.value = '' }, 2400)
-}
-
-function refreshLiveData() {
-  now.value = new Date()
-  const next = Math.max(18, Math.min(78, activitySeries.value.at(-1)! + Math.round(Math.random() * 14 - 6)))
-  activitySeries.value = [...activitySeries.value.slice(1), next]
-  activeNow.value = Math.max(24, Math.min(students.value, activeNow.value + Math.round(Math.random() * 6 - 3)))
-  requestsPerMinute.value = Math.max(4.2, Math.min(16, +(requestsPerMinute.value + Math.random() * 2.4 - 1.1).toFixed(1)))
-  liveConversationDelta.value += Math.random() > .42 ? 1 : 0
-  if (Math.random() > .48) {
-    const event = eventPool[Math.floor(Math.random() * eventPool.length)]
-    liveEvents.value = [{ ...event, time: '刚刚' }, ...liveEvents.value.slice(0, 3)]
-  }
-}
+const liveQuestions = computed(() => Array.from({ length: 3 }, (_, index) => questionPool[(questionCursor.value + index) % questionPool.length]))
+const eventPool = [
+  '物理 2402 新增 1 次概念提问，AI 已归入“衍射角关系”疑惑簇',
+  '物理 2401 提交预习测验，班级正确率更新为 76%',
+  '智慧星完成一次追问式辅导，学生随后修正了错误答案',
+  'AI 发现 2 条相似提问，已合并更新课堂讲解建议',
+]
+const latestEvent = computed(() => eventPool[eventCursor.value])
 
 function toggleLive() {
   isLive.value = !isLive.value
-  notify(isLive.value ? '实时数据流已恢复' : '实时数据流已暂停')
 }
 
-let liveTimer: number | undefined
+function updateLiveData() {
+  now.value = new Date()
+  const next = Math.max(24, Math.min(78, pulse.value.at(-1)! + Math.round(Math.random() * 13 - 6)))
+  pulse.value = [...pulse.value.slice(1), next]
+  const direction = Math.random() > .48 ? 1 : -1
+  activeStudents.value = Math.max(21, Math.min(eligible.value, activeStudents.value + direction))
+  aiRate.value = Math.max(4.5, Math.min(15, +(aiRate.value + Math.random() * 2 - .9).toFixed(1)))
+  conversationDelta.value += 1
+  questionCursor.value = (questionCursor.value + 1) % questionPool.length
+  eventCursor.value = (eventCursor.value + 1) % eventPool.length
+  updateVersion.value += 1
+}
+
+let timer: number | undefined
 onMounted(() => {
-  liveTimer = window.setInterval(() => {
-    if (isLive.value) refreshLiveData()
-  }, 4000)
+  timer = window.setInterval(() => {
+    if (isLive.value) updateLiveData()
+  }, 2800)
 })
-onBeforeUnmount(() => window.clearInterval(liveTimer))
+onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template>
-  <div class="teacher-app">
-    <aside class="teacher-sidebar">
-      <div class="brand">
-        <div class="brand-mark">S</div>
-        <div><strong>SIREN 教学云</strong><span>大学物理实验</span></div>
+  <div class="cockpit">
+    <header class="cockpit-header">
+      <div class="product-brand">
+        <div class="brand-symbol"><span>S</span><i></i></div>
+        <div><h1>AI 物理实验教学驾驶舱</h1><p>SIREN · 智慧星学情分析中心</p></div>
       </div>
-      <nav class="teacher-nav" aria-label="教师端导航">
-        <p>教学管理</p>
-        <a class="active" href="#overview"><span class="nav-icon">▦</span>数据驾驶舱</a>
-        <a href="#students"><span class="nav-icon">♙</span>学生学情</a>
-        <a href="#quiz"><span class="nav-icon">✓</span>测验分析</a>
-        <a href="#questions"><span class="nav-icon">◌</span>疑惑洞察 <b>12</b></a>
-        <p>智能教学</p>
-        <a href="#brief"><span class="nav-icon">✦</span>AI 备课助手</a>
-        <a href="#resources"><span class="nav-icon">▤</span>教学资源</a>
-        <a href="#reports"><span class="nav-icon">↗</span>教学报告</a>
-      </nav>
-      <div class="privacy-note"><span>●</span><div><strong>数据已脱敏</strong><small>仅用于教学改进，不参与自动评分</small></div></div>
-      <a class="back-student" href="/">← 返回学生端</a>
-    </aside>
 
-    <main class="teacher-main">
-      <header class="teacher-topbar">
-        <div><h1>教学数据驾驶舱</h1><p>早上好，王老师。这里是学生预习情况与疑惑摘要。</p></div>
-        <div class="top-actions">
-          <button class="icon-button" aria-label="通知">♢<span></span></button>
-          <div class="teacher-profile"><div>王</div><p><strong>王老师</strong><span>课程负责人</span></p><i>⌄</i></div>
-        </div>
-      </header>
-
-      <div class="teacher-content" id="overview">
-        <section class="filters" aria-label="数据筛选">
-          <label>班级<select v-model="selectedClass"><option value="all">全部班级（2）</option><option value="class1">物理 2401</option><option value="class2">物理 2402</option></select></label>
-          <label>实验<select v-model="selectedExperiment"><option value="surface">液体表面张力系数测量</option><option value="diffraction">光栅衍射实验</option></select></label>
-          <label>时间<select v-model="range"><option>近 7 天</option><option>本教学周</option><option>本学期</option></select></label>
-          <span class="freshness"><i></i>数据更新于 09:42</span>
-          <button class="export-button" @click="notify('教学数据报告已生成')">⇩ 导出报告</button>
-        </section>
-
-        <section class="hero-summary">
-          <div class="hero-copy">
-            <span class="eyebrow">✦ AI 学情速览</span>
-            <h2>整体预习进展良好，<em>但有 2 个概念需要重点讲解</em></h2>
-            <p>学生对“衍射角与条纹间距关系”的理解分歧最明显，相关题目错误率 42%，且在与智慧星的对话中被重复提问 31 次。</p>
-            <div class="hero-actions"><button @click="notify('已生成 5 分钟课堂讲解提纲')">生成讲解方案</button><a href="#questions">查看完整分析 →</a></div>
-          </div>
-          <div class="hero-signal" aria-label="AI 综合判断">
-            <div class="orb"><span>AI</span><i></i><i></i><i></i></div>
-            <p><strong>建议课前干预</strong><span>可信度 92%</span></p>
-          </div>
-        </section>
-
-        <section class="metric-grid">
-          <article><div class="metric-head"><span class="metric-icon blue">♙</span><b class="good">较上周 +6.2%</b></div><strong>{{ students }}</strong><p>参与学生 <span>/ {{ eligibleStudents }} 人</span></p><small>覆盖本次实验的有效学习记录</small></article>
-          <article><div class="metric-head"><span class="metric-icon green">✓</span><b class="good">↑ 4.1%</b></div><strong>{{ completion }}%</strong><p>预习完成率</p><div class="mini-progress"><i :style="{ width: `${completion}%` }"></i></div></article>
-          <article><div class="metric-head"><span class="metric-icon violet">◎</span><b class="good">↑ 3.8%</b></div><strong>{{ accuracy }}%</strong><p>测验平均正确率</p><small>共完成 {{ students * 5 }} 道题</small></article>
-          <article><div class="metric-head"><span class="metric-icon orange">✦</span><b>人均 2.1 次</b></div><strong>{{ conversations }}</strong><p>AI 有效对话</p><small>已排除问候与重复消息</small></article>
-          <article class="risk-card"><div class="metric-head"><span class="metric-icon red">!</span><b>需要关注</b></div><strong>{{ helpNeeded }}</strong><p>需重点帮助学生</p><small>低正确率且高频求助</small></article>
-        </section>
-
-        <section class="dashboard-row">
-          <article class="panel trend-panel" id="quiz">
-            <header><div><span class="panel-kicker">学习趋势</span><h3>预习效果持续提升</h3></div><div class="legend"><span class="blue-dot"></span>平均正确率 <i></i>目标线 80%</div></header>
-            <div class="chart-wrap">
-              <div class="y-axis"><span>100%</span><span>80%</span><span>60%</span><span>40%</span></div>
-              <svg viewBox="0 0 480 185" role="img" aria-label="近七日平均正确率折线图">
-                <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4578ff" stop-opacity=".24"/><stop offset="1" stop-color="#4578ff" stop-opacity="0"/></linearGradient></defs>
-                <g class="grid"><line v-for="y in [25,73,121,169]" :key="y" x1="28" :y1="y" x2="460" :y2="y" /></g>
-                <line class="target" x1="28" y1="55" x2="460" y2="55" />
-                <polygon :points="`${linePoints} 460,169 28,169`" fill="url(#area)" />
-                <polyline :points="linePoints" fill="none" stroke="#3567ef" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                <circle v-for="(value, index) in trend" :key="index" :cx="28 + index * 72" :cy="160 - (value - 45) * 3" r="4" fill="white" stroke="#3567ef" stroke-width="3" />
-              </svg>
-              <div class="x-axis"><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span><span>今天</span></div>
-            </div>
-            <footer><span>当前较课程目标低 <strong>{{ Math.max(0, 80 - accuracy) }} 个百分点</strong></span><span>预计实验课前可达 <strong>81%</strong></span></footer>
-          </article>
-
-          <article class="panel insight-panel" id="brief">
-            <header><div><span class="panel-kicker purple">AI 教学建议</span><h3>下一节课建议这样安排</h3></div><button aria-label="更多">•••</button></header>
-            <ol class="lesson-plan">
-              <li><span>01</span><div><strong>5 分钟概念辨析</strong><p>用动态光路图对比“衍射角增大”与“条纹间距变化”。</p><em>覆盖 31 名学生的共同疑惑</em></div></li>
-              <li><span>02</span><div><strong>3 分钟公式拆解</strong><p>回顾 Kelvin 公式中 λ、k、θ 的物理意义和单位。</p><em>关联错题 Q2、Q4</em></div></li>
-              <li><span>03</span><div><strong>分组追问重点学生</strong><p>优先关注同时存在低正确率与高频求助的学生。</p><em>已识别 {{ helpNeeded }} 人</em></div></li>
-            </ol>
-            <button class="prepare-button" @click="notify('备课卡片已加入教学资源')">✦ 一键生成备课卡片</button>
-          </article>
-        </section>
-
-        <section class="dashboard-row lower-row">
-          <article class="panel misconception-panel" id="questions">
-            <header><div><span class="panel-kicker orange-text">疑惑聚类</span><h3>学生最困惑的知识点</h3></div><a href="#students">查看全部 →</a></header>
-            <div class="misconception-list">
-              <div v-for="(item, index) in misconceptions" :key="item.title" class="misconception-item">
-                <span class="rank" :class="item.tone">{{ index + 1 }}</span>
-                <div class="misconception-copy"><strong>{{ item.title }}</strong><p>{{ item.note }}</p><div class="bar"><i :class="item.tone" :style="{ width: `${item.wrong * 1.8}%` }"></i></div></div>
-                <div class="misconception-num"><strong>{{ item.count }}<small> 次</small></strong><span>{{ item.wrong }}% 错误率</span></div>
-              </div>
-            </div>
-            <p class="method-note">✦ AI 基于 {{ conversations }} 条有效对话与 {{ students * 5 }} 次答题记录聚类，已自动合并相似表达。</p>
-          </article>
-
-          <article class="panel question-panel">
-            <header><div><span class="panel-kicker green-text">真实声音</span><h3>学生最近在问什么</h3></div><span class="live"><i></i>实时更新</span></header>
-            <div class="quote-list">
-              <blockquote><p>“老师，为什么衍射角变大以后，屏幕上的条纹反而更疏了？”</p><footer><span>匿名学生 · 物理 2402</span><em>概念理解</em></footer></blockquote>
-              <blockquote><p>“波数 k 是不是直接用 2π/λ？这里的单位需要换成米吗？”</p><footer><span>匿名学生 · 物理 2401</span><em>公式应用</em></footer></blockquote>
-              <blockquote><p>“拟合出来的曲线很好看，是不是就说明实验结果一定准确？”</p><footer><span>匿名学生 · 物理 2402</span><em>结果判读</em></footer></blockquote>
-            </div>
-          </article>
-        </section>
-
-        <section class="panel student-panel" id="students">
-          <header><div><span class="panel-kicker red-text">教学干预</span><h3>需要重点关注的学生</h3><p>综合预习正确率、错题分布和 AI 求助频次识别，仅作为教师参考。</p></div><label class="search">⌕<input v-model="search" placeholder="搜索学生或疑惑" /></label></header>
-          <div class="table-scroll"><table><thead><tr><th>学生</th><th>班级</th><th>测验得分</th><th>错题</th><th>AI 提问</th><th>主要疑惑</th><th>风险</th><th>最近学习</th><th></th></tr></thead><tbody>
-            <tr v-for="student in filteredStudents" :key="student.id"><td><span class="student-avatar">{{ student.name.slice(-1) }}</span><div><strong>{{ student.name }}</strong><small>{{ student.id }}</small></div></td><td>{{ student.className }}</td><td><strong :class="student.quiz < 60 ? 'score-low' : ''">{{ student.quiz }}</strong> / 100</td><td>{{ student.wrong }} 题</td><td>{{ student.questions }} 次</td><td><span class="issue-tag">{{ student.issue }}</span></td><td><span class="risk" :class="student.risk">{{ student.risk === 'high' ? '高' : '中' }}</span></td><td>{{ student.lastActive }}</td><td><button @click="notify(`已打开 ${student.name} 的学习档案`)">查看 →</button></td></tr>
-            <tr v-if="!filteredStudents.length"><td colspan="9" class="empty">没有符合条件的学生</td></tr>
-          </tbody></table></div>
-        </section>
-
-        <footer class="teacher-footer"><span>数据范围：{{ range }} · 演示数据 · 最后更新 2026-06-30 09:42</span><span>指标口径与隐私说明 · 所有 AI 结论需由教师复核</span></footer>
+      <div class="scope-controls">
+        <label><span>教学班</span><select v-model="selectedClass"><option value="all">全部班级</option><option value="class1">物理 2401</option><option value="class2">物理 2402</option></select></label>
+        <label class="experiment-select"><span>当前实验</span><select v-model="selectedExperiment"><option value="surface">液体表面张力系数测量</option><option value="diffraction">光栅衍射实验</option></select></label>
       </div>
+
+      <div class="header-status">
+        <button class="live-switch" :class="{ paused: !isLive }" @click="toggleLive"><i></i>{{ isLive ? '实时分析中' : '已暂停' }}</button>
+        <div class="clock"><strong>{{ clock }}</strong><span>模拟实时数据</span></div>
+        <div class="teacher-avatar">王</div>
+      </div>
+    </header>
+
+    <main class="cockpit-main">
+      <section class="live-event-bar" :class="{ paused: !isLive }">
+        <strong><i></i>实时教学事件</strong>
+        <transition name="ticker" mode="out-in"><p :key="eventCursor">{{ latestEvent }}</p></transition>
+        <span>{{ clock }} · AI 诊断已同步</span>
+      </section>
+
+      <section class="kpi-strip" aria-label="核心教学指标">
+        <article><span class="kpi-icon blue">◉</span><div><p>课堂准备度</p><strong :key="readiness" class="changing-value">{{ readiness }}<small>/100</small></strong></div><em class="up">较上周 +5</em></article>
+        <article><span class="kpi-icon green">✓</span><div><p>预习完成率</p><strong>{{ completion }}<small>%</small></strong></div><em>{{ eligible }} 人应完成</em></article>
+        <article><span class="kpi-icon violet">◇</span><div><p>测验正确率</p><strong>{{ accuracy }}<small>%</small></strong></div><em class="warn">低于目标 {{ Math.max(0, 80 - accuracy) }}%</em></article>
+        <article><span class="kpi-icon orange">✦</span><div><p>AI 有效对话</p><strong :key="conversations" class="changing-value">{{ conversations }}<small>条</small></strong></div><em class="live-rate">● {{ aiRate.toFixed(1) }} 次/分钟</em></article>
+        <article class="attention-kpi"><span class="kpi-icon red">!</span><div><p>需教师关注</p><strong>{{ focusStudents }}<small>人</small></strong></div><em>已形成干预建议</em></article>
+      </section>
+
+      <section class="cockpit-grid">
+        <article class="cockpit-panel fusion-panel">
+          <header class="panel-header"><div><span class="section-code">AI 综合研判</span><h2>测验 + 对话融合诊断</h2></div><span class="confidence">可信度 92%</span></header>
+
+          <div class="ai-conclusion">
+            <span class="ai-badge">AI</span>
+            <div><p>本节课最需要解决的问题</p><h3>学生会计算，但没有真正理解<br><em>“衍射角—条纹间距—波数”</em>之间的物理联系</h3></div>
+          </div>
+
+          <div class="evidence-row">
+            <div><span>测验行为证据</span><strong>{{ eligible * 5 }}</strong><small>次答题记录</small></div>
+            <i>+</i>
+            <div><span>对话语义证据</span><strong :key="conversations" class="changing-value">{{ conversations }}</strong><small>条有效问答</small></div>
+            <i>→</i>
+            <div class="result-evidence"><span>AI 归纳结果</span><strong>3</strong><small>个核心疑惑</small></div>
+          </div>
+
+          <div class="ranking-title"><h3>高频疑惑与测验错误交叉验证</h3><span>提问次数 / 相关题错误率</span></div>
+          <div class="misconception-ranking">
+            <div v-for="(item, index) in misconceptions" :key="item.name" class="rank-row">
+              <b>{{ index + 1 }}</b>
+              <div class="rank-copy"><strong>{{ item.name }}</strong><span>{{ item.detail }}</span><div class="rank-bar"><i :style="{ width: `${item.wrong * 2}%` }"></i></div></div>
+              <div class="rank-values"><strong>{{ item.questions }}<small> 次提问</small></strong><span>{{ item.wrong }}% 错误率</span></div>
+            </div>
+          </div>
+
+          <div class="pulse-block">
+            <div class="pulse-heading"><div><h3>实时学习脉冲</h3><span>近 35 分钟有效学习事件</span></div><strong :key="activeStudents" class="changing-value"><i></i>{{ activeStudents }} 人在线</strong></div>
+            <div class="pulse-chart"><span class="scan-line"></span><i v-for="(value, index) in pulse" :key="index === pulse.length - 1 ? `live-${updateVersion}` : `bar-${index}`" :class="{ latest: index === pulse.length - 1 }" :style="{ height: `${Math.max(15, value / pulseMax * 100)}%` }"></i></div>
+            <div class="pulse-axis"><span>-35 分钟</span><span>-20 分钟</span><span>-10 分钟</span><span>现在</span></div>
+          </div>
+        </article>
+
+        <article class="cockpit-panel matrix-panel">
+          <header class="panel-header"><div><span class="section-code">班级知识画像</span><h2>核心概念掌握矩阵</h2></div><span class="matrix-note">班级 × 核心概念</span></header>
+          <div class="readiness-summary">
+            <div class="readiness-ring" :style="{ '--progress': `${readiness * 3.6}deg` }"><div><strong>{{ readiness }}</strong><span>课堂准备度</span></div></div>
+            <div><strong>{{ readiness >= 80 ? '具备开课条件' : '建议先行干预' }}</strong><p>建议用 5 分钟概念辨析后进入实验操作。</p></div>
+          </div>
+          <div class="matrix">
+            <div class="matrix-head"></div><div class="matrix-head">角度关系</div><div class="matrix-head">Kelvin</div><div class="matrix-head">误差</div><div class="matrix-head">拟合</div>
+            <div class="matrix-label">2401<small>43人</small></div><div class="cell c2">68%</div><div class="cell c3">76%</div><div class="cell c3">79%</div><div class="cell c4">86%</div>
+            <div class="matrix-label">2402<small>43人</small></div><div class="cell c1">57%<small>重点</small></div><div class="cell c2">69%</div><div class="cell c3">74%</div><div class="cell c4">81%</div>
+          </div>
+          <footer><span>低掌握</span><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><span>高掌握</span></footer>
+        </article>
+
+        <article class="cockpit-panel voice-panel">
+          <header class="panel-header"><div><span class="section-code">实时语义聚合</span><h2>学生此刻在问</h2></div><span class="streaming"><i></i>持续更新</span></header>
+          <transition-group name="question" tag="div" class="question-list">
+            <div v-for="(question, index) in liveQuestions" :key="question.text" class="question-item">
+              <span>{{ index + 1 }}</span><div><p>“{{ question.text }}”</p><small>{{ question.className }} · {{ question.tag }}</small></div>
+            </div>
+          </transition-group>
+        </article>
+
+        <article class="cockpit-panel action-panel">
+          <header class="panel-header inverse"><div><span class="section-code">AI 教学智能体</span><h2>课堂行动方案</h2></div><span class="generated">随学情更新</span></header>
+
+          <div class="action-focus"><span>本节课教学目标</span><h3>让学生从“会套公式”<br>走向“能解释物理图像”</h3><p>依据测验错误与智慧星对话的联合分析自动生成。</p></div>
+
+          <ol class="action-steps">
+            <li><span>01<small>5 min</small></span><div><strong>动态光路概念辨析</strong><p>对比衍射角变化前后的条纹位置，让学生先预测再观察。</p><em>覆盖 31 次重复疑惑</em></div></li>
+            <li><span>02<small>3 min</small></span><div><strong>公式中的物理量连线</strong><p>将 λ、k、θ 与实验装置上的可测量量逐一对应。</p><em>关联错题 Q2、Q4</em></div></li>
+            <li><span>03<small>8 min</small></span><div><strong>分层实验追问</strong><p>对 {{ focusStudents }} 名重点学生使用解释型追问，不直接给出答案。</p><em>AI 已生成追问脚本</em></div></li>
+          </ol>
+
+          <div class="teacher-prompt"><span>建议教师追问</span><p>“如果只改变激光波长，你预测条纹间距如何变化？为什么？”</p></div>
+          <button class="generate-button">✦ 生成课堂讲解卡</button>
+          <footer>AI 提供证据与建议，最终教学判断由教师完成</footer>
+        </article>
+      </section>
     </main>
-    <transition name="toast"><div v-if="toast" class="toast">✓ {{ toast }}</div></transition>
   </div>
 </template>
 
 <style scoped>
-:global(*){box-sizing:border-box}:global(body){margin:0;background:#f5f7fb;color:#172033;font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;overflow-x:hidden}.teacher-app{--blue:#3567ef;--ink:#172033;--muted:#778199;min-height:100vh;display:flex;max-width:100vw;overflow-x:hidden}.teacher-sidebar{position:fixed;inset:0 auto 0 0;width:232px;background:#101a32;color:#ced5e5;padding:26px 18px 18px;display:flex;flex-direction:column;z-index:20}.brand{display:flex;gap:12px;align-items:center;padding:0 8px 27px;border-bottom:1px solid #26314a}.brand-mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,#628aff,#315bea);display:grid;place-items:center;color:white;font-size:20px;font-weight:800;box-shadow:0 8px 22px #142456}.brand strong,.brand span{display:block}.brand strong{font-size:15px;color:#fff}.brand span{font-size:11px;color:#8994ac;margin-top:3px;letter-spacing:.5px}.teacher-nav{margin-top:16px}.teacher-nav p{font-size:10px;color:#68748d;margin:20px 12px 8px;letter-spacing:1.4px}.teacher-nav a{position:relative;display:flex;align-items:center;gap:11px;height:42px;padding:0 12px;border-radius:9px;text-decoration:none;color:#9eabc3;font-size:13px;margin:3px 0}.teacher-nav a:hover{background:#192641;color:white}.teacher-nav a.active{background:linear-gradient(90deg,#315fe9,#3f73ff);color:white;box-shadow:0 8px 20px #09122a}.teacher-nav a b{margin-left:auto;background:#ff725e;color:#fff;border-radius:8px;min-width:20px;text-align:center;font-size:10px;padding:2px 5px}.nav-icon{width:18px;text-align:center;font-size:16px}.privacy-note{margin-top:auto;display:flex;gap:9px;background:#172440;border:1px solid #283650;border-radius:10px;padding:11px}.privacy-note>span{color:#49c89b;font-size:10px}.privacy-note strong,.privacy-note small{display:block}.privacy-note strong{font-size:11px;color:#d9e0ee}.privacy-note small{font-size:9px;color:#71809b;line-height:1.5;margin-top:3px}.back-student{color:#75839d;text-decoration:none;font-size:11px;margin:14px 8px 0}.teacher-main{width:calc(100% - 232px);margin-left:232px;min-width:0}.teacher-topbar{height:78px;background:white;border-bottom:1px solid #e7ebf2;display:flex;align-items:center;justify-content:space-between;padding:0 34px;position:sticky;top:0;z-index:12}.teacher-topbar h1{margin:0;font-size:19px}.teacher-topbar p{margin:5px 0 0;color:#929bae;font-size:11px}.top-actions,.teacher-profile{display:flex;align-items:center}.top-actions{gap:20px}.icon-button{width:34px;height:34px;border:1px solid #e7eaf1;background:white;border-radius:9px;position:relative;color:#58637a}.icon-button span{position:absolute;width:6px;height:6px;background:#ff5c58;border:1px solid white;border-radius:50%;top:7px;right:8px}.teacher-profile{gap:9px}.teacher-profile>div{width:35px;height:35px;border-radius:10px;background:#e6ecff;color:#315fe9;display:grid;place-items:center;font-weight:700}.teacher-profile p{margin:0}.teacher-profile strong,.teacher-profile span{display:block}.teacher-profile strong{font-size:12px}.teacher-profile span{font-size:9px;color:#97a0b3}.teacher-profile i{font-style:normal;color:#8d96a9;margin-left:5px}.teacher-content{padding:22px 28px 8px;max-width:1600px;margin:auto;min-width:0}.filters{display:flex;align-items:end;gap:12px;margin-bottom:18px;min-width:0}.filters label{font-size:10px;color:#8a94a8;min-width:0}.filters select{display:block;margin-top:6px;height:34px;border:1px solid #dfe4ed;border-radius:8px;background:#fff;color:#34405a;font-size:11px;padding:0 30px 0 11px;outline:none;max-width:100%;min-width:0}.freshness{font-size:10px;color:#98a1b3;margin-left:auto;align-self:center}.freshness i,.live i{display:inline-block;width:6px;height:6px;background:#3fc790;border-radius:50%;margin-right:6px}.export-button{height:34px;border:1px solid #dfe4ed;background:#fff;border-radius:8px;color:#46536e;padding:0 13px;font-size:11px}.hero-summary{min-height:190px;border-radius:16px;background:linear-gradient(115deg,#16264b 0%,#243a72 60%,#315bb0 100%);color:white;padding:27px 34px;display:flex;justify-content:space-between;align-items:center;overflow:hidden;position:relative;box-shadow:0 14px 30px #243c6d20}.hero-summary:after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;border:1px solid #ffffff12;right:25px;top:-72px;box-shadow:0 0 0 35px #ffffff05,0 0 0 70px #ffffff04}.hero-copy{max-width:760px;min-width:0;position:relative;z-index:2}.eyebrow{display:inline-block;color:#9fb9ff;font-size:11px;background:#ffffff0e;border:1px solid #ffffff16;border-radius:12px;padding:5px 9px}.hero-copy h2{font-size:23px;line-height:1.4;margin:13px 0 8px}.hero-copy h2 em{font-style:normal;color:#ffd57c}.hero-copy p{font-size:12px;color:#c1cde3;line-height:1.8;margin:0;max-width:690px}.hero-actions{display:flex;align-items:center;gap:19px;margin-top:16px}.hero-actions button{border:0;border-radius:8px;background:#fff;color:#214ba6;height:34px;padding:0 15px;font-size:11px;font-weight:700}.hero-actions a{color:#c5d5ff;text-decoration:none;font-size:11px}.hero-signal{position:relative;z-index:2;width:170px;text-align:center}.orb{width:78px;height:78px;margin:auto;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#9fc3ff,#477df1 45%,#284a9e);box-shadow:0 0 30px #68a0ff77;position:relative}.orb span{font-size:22px;font-weight:800}.orb i{position:absolute;inset:-10px;border:1px solid #a7c4ff45;border-radius:50%}.orb i:nth-child(2){inset:-20px}.orb i:nth-child(3){inset:-31px}.hero-signal p strong,.hero-signal p span{display:block}.hero-signal p strong{font-size:11px}.hero-signal p span{font-size:9px;color:#9db4e3;margin-top:4px}.metric-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0}.metric-grid article{background:#fff;border:1px solid #e8ebf2;border-radius:12px;padding:15px 16px;min-width:0;box-shadow:0 4px 14px #31446d08}.metric-head{display:flex;align-items:center;justify-content:space-between}.metric-head b{font-size:9px;color:#7f899d;font-weight:500}.metric-head b.good{color:#28a97a}.metric-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;font-weight:700}.metric-icon.blue{background:#e9efff;color:#3567ef}.metric-icon.green{background:#e4f8f0;color:#20a978}.metric-icon.violet{background:#f0eaff;color:#8057dd}.metric-icon.orange{background:#fff0df;color:#e98a2d}.metric-icon.red{background:#ffe9e7;color:#e65950}.metric-grid article>strong{display:block;font-size:25px;margin-top:11px}.metric-grid article>p{font-size:11px;margin:2px 0 0;color:#59657b}.metric-grid article>p span,.metric-grid article>small{color:#9ca5b6}.metric-grid article>small{display:block;font-size:9px;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mini-progress{height:4px;background:#edf0f5;border-radius:5px;margin-top:10px}.mini-progress i{display:block;height:100%;background:#31ba88;border-radius:5px}.risk-card{border-color:#f2d7d5!important}.dashboard-row{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.85fr);gap:14px;margin-bottom:14px}.panel{background:#fff;border:1px solid #e7ebf2;border-radius:13px;padding:20px 21px;box-shadow:0 4px 15px #34456908;min-width:0}.panel>header{display:flex;justify-content:space-between;align-items:flex-start}.panel h3{font-size:15px;margin:4px 0 0}.panel-kicker{font-size:9px;color:#3567ef;letter-spacing:.8px;font-weight:700}.panel-kicker.purple{color:#7a55d8}.orange-text{color:#e28229}.green-text{color:#20a678}.red-text{color:#db5a54}.legend{font-size:9px;color:#8993a6;display:flex;align-items:center;gap:6px}.blue-dot{width:7px;height:7px;border-radius:50%;background:#3567ef}.legend i{width:16px;border-top:1px dashed #b9c0ce;margin-left:8px}.chart-wrap{position:relative;padding-left:35px;margin-top:10px}.chart-wrap svg{display:block;width:100%;height:190px}.grid line{stroke:#edf0f5;stroke-width:1}.target{stroke:#b9c0ce;stroke-width:1;stroke-dasharray:4}.y-axis{position:absolute;left:0;top:9px;height:153px;display:flex;flex-direction:column;justify-content:space-between;font-size:8px;color:#a0a8b8}.x-axis{display:flex;justify-content:space-between;font-size:8px;color:#8993a6;padding:0 8px}.trend-panel>footer{border-top:1px solid #edf0f5;margin-top:11px;padding-top:11px;display:flex;justify-content:space-between;color:#8c96a9;font-size:9px}.trend-panel>footer strong{color:#42506a}.insight-panel header button{border:0;background:transparent;color:#8b95a8}.lesson-plan{padding:0;margin:13px 0 11px;list-style:none}.lesson-plan li{display:flex;gap:11px;padding:10px 0;border-bottom:1px solid #eff1f5}.lesson-plan li>span{font-size:10px;color:#6f50d0;background:#eeeaff;width:26px;height:26px;display:grid;place-items:center;border-radius:8px;font-weight:700}.lesson-plan li div{flex:1}.lesson-plan strong{font-size:11px}.lesson-plan p{font-size:9px;color:#747f94;line-height:1.55;margin:3px 0}.lesson-plan em{font-style:normal;font-size:8px;color:#8a63db;background:#f4f0ff;border-radius:8px;padding:3px 6px}.prepare-button{width:100%;height:34px;border:1px solid #ded6f5;color:#6743c7;background:#f7f4ff;border-radius:8px;font-size:10px;font-weight:700}.lower-row{grid-template-columns:minmax(0,1.35fr) minmax(330px,.75fr)}.panel header a{font-size:9px;color:#5273ce;text-decoration:none}.misconception-list{margin-top:9px}.misconception-item{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #eff1f5}.rank{width:25px;height:25px;border-radius:7px;display:grid;place-items:center;font-size:10px;font-weight:700}.rank.orange{background:#fff0df;color:#df8128}.rank.blue{background:#e8eeff;color:#3567ef}.rank.violet{background:#f0eaff;color:#7956d3}.rank.green{background:#e4f7ef;color:#20a678}.misconception-copy{flex:1}.misconception-copy strong{font-size:10px}.misconception-copy p{font-size:8px;color:#929bae;margin:3px 0 6px}.bar{height:3px;background:#f0f2f6;border-radius:4px}.bar i{display:block;height:100%;border-radius:4px}.bar i.orange{background:#ef9945}.bar i.blue{background:#527bf1}.bar i.violet{background:#8967dc}.bar i.green{background:#3eb48b}.misconception-num{text-align:right}.misconception-num strong,.misconception-num span{display:block}.misconception-num strong{font-size:13px}.misconception-num strong small{font-size:8px;color:#9099aa}.misconception-num span{font-size:8px;color:#ec796e;margin-top:3px}.method-note{font-size:8px;color:#8792a7;background:#f7f8fb;padding:8px 10px;border-radius:7px;margin:11px 0 0}.live{font-size:9px;color:#5d6a80}.quote-list{margin-top:11px}.quote-list blockquote{margin:0 0 9px;padding:11px 12px;border:1px solid #edf0f5;border-left:3px solid #6c8cf1;border-radius:8px;background:#fbfcfe}.quote-list blockquote:nth-child(2){border-left-color:#8c67df}.quote-list blockquote:nth-child(3){border-left-color:#44b68f}.quote-list p{font-size:10px;line-height:1.55;margin:0;color:#3f4b62}.quote-list footer{display:flex;justify-content:space-between;margin-top:8px}.quote-list footer span{font-size:8px;color:#929bad}.quote-list footer em{font-style:normal;font-size:8px;color:#5574c9;background:#edf2ff;padding:2px 6px;border-radius:7px}.student-panel{margin-bottom:14px;padding-bottom:10px}.student-panel>header{align-items:center}.student-panel header p{font-size:9px;color:#8e98aa;margin:4px 0 0}.search{height:32px;border:1px solid #e0e4ec;border-radius:8px;display:flex;align-items:center;padding:0 9px;color:#8b95a7}.search input{border:0;outline:0;font-size:9px;width:130px;margin-left:6px}.table-scroll{overflow:auto;margin-top:14px}table{width:100%;border-collapse:collapse;white-space:nowrap}th{text-align:left;background:#f7f8fa;color:#8b95a7;font-size:8px;font-weight:600;padding:9px 10px}td{border-bottom:1px solid #eef1f5;padding:10px;color:#536078;font-size:9px}td:first-child{display:flex;align-items:center;gap:8px}.student-avatar{width:27px;height:27px;border-radius:8px;background:#e8eeff;color:#3567ef;display:grid;place-items:center;font-weight:700}td strong,td small{display:block}td small{font-size:7px;color:#9da5b5;margin-top:2px}.score-low{color:#e65f57}.issue-tag{background:#f3f5f8;padding:4px 7px;border-radius:6px}.risk{display:inline-grid;place-items:center;width:23px;height:20px;border-radius:6px;font-weight:700}.risk.high{background:#ffe8e6;color:#e65d54}.risk.medium{background:#fff1dc;color:#d9882c}td button{border:0;background:transparent;color:#456ad0;font-size:8px}.empty{text-align:center!important;padding:24px!important}.teacher-footer{display:flex;justify-content:space-between;color:#9ba4b5;font-size:8px;padding:1px 4px 12px}.toast{position:fixed;right:26px;bottom:24px;background:#17233e;color:#fff;padding:12px 16px;border-radius:9px;font-size:11px;box-shadow:0 10px 30px #15213d44;z-index:50}.toast-enter-active,.toast-leave-active{transition:.2s}.toast-enter-from,.toast-leave-to{opacity:0;transform:translateY(8px)}
-@media(max-width:1100px){.metric-grid{grid-template-columns:repeat(3,1fr)}.dashboard-row,.lower-row{grid-template-columns:1fr}.hero-signal{display:none}}@media(max-width:760px){.teacher-sidebar{display:none}.teacher-main{width:100%;max-width:100vw;margin-left:0;overflow:hidden}.teacher-topbar{padding:0 16px}.teacher-content{width:100%;padding:15px}.filters{width:100%;flex-wrap:wrap}.filters label{width:100%;flex:none}.filters select{width:calc(100vw - 30px)}.freshness{margin-left:0}.metric-grid{grid-template-columns:repeat(2,1fr)}.hero-summary{width:100%;padding:23px}.hero-copy{width:100%}.hero-copy h2,.hero-copy p{white-space:normal;overflow-wrap:anywhere;word-break:break-word}.hero-copy h2{font-size:19px}.teacher-profile p,.teacher-profile i{display:none}.student-panel{padding:15px}.student-panel>header{align-items:flex-start;gap:12px;flex-direction:column}.teacher-footer{display:block;line-height:2}}@media(max-width:480px){.metric-grid{grid-template-columns:1fr}.export-button{margin-left:0}.hero-copy h2{font-size:17px}.hero-actions{align-items:flex-start;flex-direction:column;gap:10px}.trend-panel>footer{display:block;line-height:2}}
+:global(*){box-sizing:border-box}:global(html),:global(body),:global(#app){width:100%;height:100%;margin:0;overflow:hidden}:global(body){font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;background:#07101f;color:#e8eefc}.cockpit{width:100vw;height:100vh;overflow:hidden;background:radial-gradient(circle at 50% -20%,#17305d 0,#0a1529 42%,#07101f 100%);display:flex;flex-direction:column}.cockpit-header{height:76px;flex:none;padding:0 28px;display:grid;grid-template-columns:minmax(300px,1fr) auto minmax(300px,1fr);align-items:center;border-bottom:1px solid #ffffff12;background:#081326dc;backdrop-filter:blur(16px)}.product-brand{display:flex;align-items:center;gap:13px}.brand-symbol{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#4f87ff,#2553d5);font-size:20px;font-weight:800;position:relative;box-shadow:0 0 25px #3972ff44}.brand-symbol i{position:absolute;width:7px;height:7px;background:#4ce6b3;border:2px solid #17346c;border-radius:50%;right:-1px;top:-1px}.product-brand h1{font-size:21px;margin:0;letter-spacing:.3px}.product-brand p{font-size:11px;color:#7890b8;margin:4px 0 0}.scope-controls{display:flex;gap:10px}.scope-controls label{height:46px;min-width:130px;border:1px solid #ffffff14;background:#ffffff08;border-radius:10px;padding:6px 10px}.scope-controls label.experiment-select{min-width:230px}.scope-controls label>span{display:block;color:#6f86ad;font-size:9px}.scope-controls select{width:100%;border:0;background:transparent;color:#e5ecfa;font-size:12px;font-weight:600;outline:0;margin-top:3px}.scope-controls option{color:#172033}.header-status{display:flex;justify-content:flex-end;align-items:center;gap:14px}.live-switch{height:32px;border:1px solid #2b7e68;background:#0f392f;color:#62e1b7;border-radius:18px;padding:0 12px;font-size:11px}.live-switch i,.streaming i,.pulse-heading strong i{display:inline-block;width:6px;height:6px;background:#4ce6b3;border-radius:50%;margin-right:6px;animation:signal 1.5s infinite}.live-switch.paused{border-color:#526079;background:#202b3d;color:#9ba8bc}.live-switch.paused i{background:#8d98aa;animation:none}.clock{text-align:right}.clock strong,.clock span{display:block}.clock strong{font:600 14px ui-monospace,Consolas,monospace;letter-spacing:.5px}.clock span{color:#667a9d;font-size:9px;margin-top:2px}.teacher-avatar{width:34px;height:34px;border-radius:10px;background:#263a62;color:#8cb0ff;display:grid;place-items:center;font-weight:700}.cockpit-main{height:calc(100vh - 76px);padding:16px 20px 18px;display:flex;flex-direction:column;gap:13px;min-height:0}.kpi-strip{height:88px;flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:11px}.kpi-strip article{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:11px;padding:12px 15px;border:1px solid #ffffff12;background:linear-gradient(135deg,#14223bda,#0e1b31da);border-radius:12px;box-shadow:inset 0 1px #ffffff08}.kpi-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:17px}.kpi-icon.blue{color:#71a0ff;background:#2f68e326}.kpi-icon.green{color:#5edfb3;background:#2aae8124}.kpi-icon.violet{color:#b291ff;background:#8057dd24}.kpi-icon.orange{color:#ffc072;background:#e98a2d22}.kpi-icon.red{color:#ff857d;background:#e6595026}.kpi-strip p{color:#8fa0bd;font-size:11px;margin:0 0 2px}.kpi-strip strong{font-size:26px;line-height:1}.kpi-strip strong small{font-size:11px;color:#7285a5;margin-left:2px}.kpi-strip em{font-style:normal;color:#7e90ad;font-size:9px;text-align:right}.kpi-strip em.up{color:#55d7ad}.kpi-strip em.warn{color:#ffb65f}.kpi-strip em.live-rate{color:#ffc16f}.kpi-strip .attention-kpi{border-color:#d65a553f;background:linear-gradient(135deg,#2c1b29,#111a2c)}.cockpit-grid{flex:1;min-height:0;display:grid;grid-template-columns:1.25fr .92fr .9fr;grid-template-rows:1.08fr .82fr;grid-template-areas:"fusion matrix action" "fusion voice action";gap:13px}.cockpit-panel{min-width:0;min-height:0;overflow:hidden;border:1px solid #ffffff12;background:linear-gradient(145deg,#111e35eb,#0b172beb);border-radius:14px;padding:17px 19px;box-shadow:inset 0 1px #ffffff08,0 12px 30px #00000018}.fusion-panel{grid-area:fusion;display:flex;flex-direction:column}.matrix-panel{grid-area:matrix}.voice-panel{grid-area:voice}.action-panel{grid-area:action;background:linear-gradient(155deg,#152d5b,#151d3d 58%,#221b42);border-color:#557cce55}.panel-header{display:flex;justify-content:space-between;align-items:flex-start;flex:none}.section-code{font-size:9px;color:#4f89ff;letter-spacing:1.2px;font-weight:700}.panel-header h2{font-size:17px;margin:3px 0 0}.confidence,.matrix-note,.generated{font-size:9px;border:1px solid #ffffff13;background:#ffffff08;border-radius:10px;color:#8ea2c3;padding:4px 8px}.confidence{color:#68dcb7;border-color:#39a68144}.ai-conclusion{display:flex;gap:13px;margin-top:13px;padding:13px 15px;border:1px solid #4374dd42;background:linear-gradient(90deg,#1c376b6e,#13284d45);border-radius:11px}.ai-badge{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:10px;color:white;font-weight:800;background:linear-gradient(145deg,#568bff,#2859df);box-shadow:0 0 18px #3f77ef55}.ai-conclusion p{font-size:10px;color:#85a7e9;margin:0 0 5px}.ai-conclusion h3{font-size:15px;line-height:1.5;margin:0}.ai-conclusion em{font-style:normal;color:#ffd078}.evidence-row{display:grid;grid-template-columns:1fr 18px 1fr 18px 1fr;align-items:center;margin:12px 0}.evidence-row>div{text-align:center;background:#ffffff06;border:1px solid #ffffff0b;border-radius:9px;padding:8px}.evidence-row>i{text-align:center;color:#526889;font-style:normal}.evidence-row span,.evidence-row strong,.evidence-row small{display:block}.evidence-row span{font-size:9px;color:#7f91ad}.evidence-row strong{font-size:17px;margin:2px 0}.evidence-row small{font-size:8px;color:#607390}.evidence-row .result-evidence{border-color:#8167d53d;background:#6b50bf16}.ranking-title{display:flex;align-items:end;justify-content:space-between;border-top:1px solid #ffffff0c;padding-top:10px}.ranking-title h3{font-size:12px;margin:0}.ranking-title span{font-size:8px;color:#657895}.misconception-ranking{margin-top:3px}.rank-row{display:grid;grid-template-columns:26px 1fr 83px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #ffffff0a}.rank-row>b{width:25px;height:25px;display:grid;place-items:center;border-radius:7px;background:#ffb55e20;color:#ffbd6f;font-size:10px}.rank-copy strong,.rank-copy span{display:block}.rank-copy strong{font-size:11px}.rank-copy span{color:#70829e;font-size:8px;margin:2px 0 5px}.rank-bar{height:3px;background:#ffffff0b;border-radius:4px}.rank-bar i{display:block;height:100%;background:linear-gradient(90deg,#4d79e9,#ffae5d);border-radius:4px}.rank-values{text-align:right}.rank-values strong,.rank-values span{display:block}.rank-values strong{font-size:12px;color:#ffc277}.rank-values strong small{font-size:8px}.rank-values span{font-size:8px;color:#ff817b;margin-top:3px}.pulse-block{margin-top:auto;padding-top:10px}.pulse-heading{display:flex;justify-content:space-between;align-items:center}.pulse-heading h3{font-size:12px;margin:0}.pulse-heading span{font-size:8px;color:#677a99}.pulse-heading strong{font-size:10px;color:#64dab5}.pulse-chart{height:54px;margin-top:7px;display:flex;align-items:end;gap:5px;border-bottom:1px solid #2b3b55;background:repeating-linear-gradient(to top,transparent 0,transparent 17px,#ffffff08 18px)}.pulse-chart>i{flex:1;min-height:6px;border-radius:3px 3px 0 0;background:#4168b873;transition:height .7s}.pulse-chart>i.latest{background:#5f8cff;box-shadow:0 0 10px #4778ed88}.pulse-axis{display:flex;justify-content:space-between;color:#5d7091;font-size:7px;margin-top:4px}.readiness-summary{display:flex;gap:14px;align-items:center;margin:13px 0}.readiness-ring{--progress:280deg;width:82px;height:82px;border-radius:50%;padding:8px;background:conic-gradient(#5b87ff 0 var(--progress),#25334c var(--progress));flex:none}.readiness-ring>div{width:100%;height:100%;border-radius:50%;background:#101d33;display:grid;place-content:center;text-align:center}.readiness-ring strong{font-size:23px}.readiness-ring span{font-size:7px;color:#7789a8}.readiness-summary>div:last-child>strong{font-size:12px;color:#66dcb6}.readiness-summary p{font-size:9px;line-height:1.5;color:#7486a3;margin:4px 0 0}.matrix{display:grid;grid-template-columns:54px repeat(4,1fr);gap:5px}.matrix-head{text-align:center;font-size:8px;color:#6e819f;padding:3px}.matrix-label{font-size:10px;font-weight:700;display:grid;place-content:center}.matrix-label small{display:block;color:#60728f;font-size:7px}.cell{min-height:43px;border-radius:7px;display:grid;place-content:center;text-align:center;font-size:11px;font-weight:700}.cell small{display:block;font-size:7px}.c1{background:#673237!important;color:#ff928b}.c2{background:#58452f!important;color:#ffc474}.c3{background:#263e70!important;color:#9cbdff}.c4{background:#315fc0!important;color:#fff}.matrix-panel footer{display:flex;align-items:center;justify-content:flex-end;gap:4px;color:#617492;font-size:7px;margin-top:8px}.matrix-panel footer i{width:15px;height:6px;border-radius:2px}.question-list{margin-top:8px}.question-item{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:7px 0;border-bottom:1px solid #ffffff0b}.question-item>span{width:23px;height:23px;border-radius:7px;background:#375eaf45;color:#89adff;display:grid;place-items:center;font-size:9px}.question-item p{font-size:11px;line-height:1.45;margin:0;color:#d6dfef}.question-item small{font-size:8px;color:#6d7f9c}.streaming{font-size:9px;color:#5eddb3}.question-enter-active{transition:.4s}.question-enter-from{opacity:0;transform:translateY(-8px)}.panel-header.inverse .section-code{color:#a8c2ff}.generated{color:#76e4bd}.action-focus{margin:14px 0;padding:14px 15px;border-left:3px solid #f8bd68;background:#ffffff08;border-radius:0 10px 10px 0}.action-focus>span{font-size:9px;color:#f4bd6a}.action-focus h3{font-size:18px;line-height:1.45;margin:5px 0}.action-focus p{font-size:8px;color:#8396b7;margin:0}.action-steps{list-style:none;margin:0;padding:0}.action-steps li{display:grid;grid-template-columns:42px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #ffffff12}.action-steps li>span{height:39px;border-radius:9px;background:#ffffff0c;color:#8eb0ff;display:grid;place-content:center;text-align:center;font-size:11px;font-weight:700}.action-steps li>span small{display:block;font-size:7px;color:#657ba2}.action-steps strong{font-size:12px}.action-steps p{font-size:9px;line-height:1.45;color:#91a0b9;margin:3px 0}.action-steps em{font-style:normal;font-size:8px;color:#c8b0ff;background:#7558c72c;border-radius:6px;padding:3px 5px}.teacher-prompt{margin-top:12px;padding:10px 12px;background:#f5bd6814;border:1px solid #f5bd682c;border-radius:9px}.teacher-prompt span{font-size:8px;color:#f5c475}.teacher-prompt p{font-size:11px;line-height:1.5;margin:3px 0 0}.generate-button{width:100%;height:38px;margin-top:11px;border:1px solid #7098ec;background:linear-gradient(90deg,#3968d2,#6a55c9);color:#fff;border-radius:9px;font-size:11px;font-weight:700}.action-panel>footer{text-align:center;color:#657897;font-size:8px;margin-top:8px}@keyframes signal{0%,100%{box-shadow:0 0 0 0 #4ce6b355}50%{box-shadow:0 0 0 5px #4ce6b300}}
+@media(max-width:1180px){.cockpit-header{grid-template-columns:1fr auto}.scope-controls{display:none}.kpi-strip article{grid-template-columns:34px 1fr}.kpi-strip em{display:none}.cockpit-grid{grid-template-columns:1.2fr .9fr .9fr}.cockpit-panel{padding:14px}.action-focus h3{font-size:16px}}
+@media(max-height:780px){.cockpit-header{height:64px}.cockpit-main{height:calc(100vh - 64px);padding:10px 16px;gap:9px}.kpi-strip{height:74px;gap:8px}.kpi-strip article{padding:8px 11px}.kpi-strip strong{font-size:22px}.cockpit-grid{gap:9px}.cockpit-panel{padding:12px 15px}.ai-conclusion{margin-top:8px;padding:9px}.evidence-row{margin:7px 0}.rank-row{padding:5px 0}.pulse-block{padding-top:5px}.pulse-chart{height:42px}.readiness-summary{margin:8px 0}.cell{min-height:36px}.action-focus{margin:8px 0;padding:9px 12px}.action-focus h3{font-size:15px}.action-steps li{padding:7px 0}.teacher-prompt{margin-top:7px;padding:7px 10px}.generate-button{height:32px;margin-top:7px}}
+@media(max-width:900px){.cockpit-header{padding:0 14px}.header-status .clock{display:none}.product-brand h1{font-size:17px}.cockpit-main{padding:10px}.kpi-strip{grid-template-columns:repeat(5,minmax(150px,1fr));overflow:hidden}.cockpit-grid{grid-template-columns:1fr 1fr;grid-template-areas:"fusion action" "fusion action"}.matrix-panel,.voice-panel{display:none}}
+.cockpit h1,.cockpit h2,.cockpit h3,.cockpit strong{color:#eef4ff}.product-brand h1{font-size:22px;color:#f4f7ff}.panel-header h2{font-size:18px;color:#eef4ff}.kpi-strip p{font-size:12px}.kpi-strip strong{font-size:27px;color:#f3f7ff}.ai-conclusion p{font-size:11px}.ai-conclusion h3{font-size:16px;color:#f1f5ff}.evidence-row span{font-size:10px}.evidence-row strong{font-size:19px}.ranking-title h3,.pulse-heading h3{font-size:13px;color:#eaf1ff}.rank-copy strong{font-size:12px;color:#e8eef9}.rank-copy span{font-size:9px}.question-item p{font-size:12px}.question-item small{font-size:9px}.action-focus h3{font-size:19px;color:#fff}.action-steps strong{font-size:13px;color:#f2f5ff}.action-steps p{font-size:10px}.teacher-prompt p{font-size:12px;color:#f2f5ff}
+.live-event-bar{height:38px;flex:none;display:grid;grid-template-columns:128px 1fr auto;align-items:center;gap:14px;padding:0 15px;border:1px solid #2c705f;background:linear-gradient(90deg,#10382f,#122c3d 60%,#14233b);border-radius:10px;overflow:hidden}.live-event-bar>strong{font-size:13px;color:#65e2b8}.live-event-bar>strong i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ce6b3;margin-right:8px;animation:signal 1.5s infinite}.live-event-bar p{font-size:13px;color:#dce8f7;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.live-event-bar>span{font-size:12px;color:#7f94b2}.live-event-bar.paused{filter:saturate(.25);opacity:.75}.ticker-enter-active,.ticker-leave-active{transition:.24s}.ticker-enter-from{opacity:0;transform:translateY(12px)}.ticker-leave-to{opacity:0;transform:translateY(-12px)}.changing-value{display:inline-block;animation:valuePop .48s ease}.pulse-chart{position:relative;overflow:hidden}.scan-line{position:absolute;z-index:3;top:0;bottom:0;width:2px;background:#80a7ff;box-shadow:0 0 12px #6e9aff;animation:scan 2.8s linear infinite}.pulse-chart>i.latest{animation:barPop .48s ease}.product-brand p,.scope-controls label>span,.live-switch,.clock span,.kpi-strip strong small,.kpi-strip em,.section-code,.confidence,.matrix-note,.generated,.ai-conclusion p,.evidence-row span,.evidence-row small,.ranking-title span,.rank-row>b,.rank-copy span,.rank-values strong small,.rank-values span,.pulse-heading span,.pulse-axis,.readiness-ring span,.readiness-summary p,.matrix-head,.matrix-label small,.cell small,.matrix-panel footer,.question-item>span,.question-item small,.streaming,.action-focus>span,.action-focus p,.action-steps li>span,.action-steps li>span small,.action-steps p,.action-steps em,.teacher-prompt span,.action-panel>footer{font-size:12px}.ai-conclusion p{font-size:13px}.evidence-row strong{font-size:20px}.rank-copy strong{font-size:13px}.rank-values strong{font-size:14px}.pulse-heading strong{font-size:13px}.readiness-ring{width:96px;height:96px}.readiness-summary>div:last-child>strong{font-size:14px}.matrix-label{font-size:13px}.cell{font-size:15px;min-height:48px}.question-item>span{width:28px;height:28px}.question-item p{font-size:14px}.action-focus p{font-size:12px}.action-steps li{grid-template-columns:48px 1fr}.action-steps li>span{height:46px}.action-steps strong{font-size:14px}.action-steps p{font-size:12px}.action-steps em{display:inline-block;font-size:12px}.teacher-prompt p{font-size:13px}.generate-button{font-size:13px}.action-panel>footer{font-size:12px}@keyframes valuePop{0%{opacity:.35;transform:translateY(6px) scale(.94)}60%{color:#74f0c2;transform:translateY(-1px) scale(1.05)}100%{opacity:1;transform:none}}@keyframes scan{from{left:-3%}to{left:103%}}@keyframes barPop{0%{transform:scaleY(.25);transform-origin:bottom}100%{transform:scaleY(1);transform-origin:bottom}}
 </style>
