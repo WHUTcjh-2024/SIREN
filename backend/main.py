@@ -20,6 +20,11 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # StaticFiles validates its directory during application construction,
+    # before the lifespan hook runs. Create runtime-owned directories here so
+    # importing the ASGI app also works in a clean checkout and in CI.
+    settings.output_dir.mkdir(parents=True, exist_ok=True)
+    settings.session_dir.mkdir(parents=True, exist_ok=True)
     application = FastAPI(
         title="SIREN Experiment API",
         version="2.0.0",
