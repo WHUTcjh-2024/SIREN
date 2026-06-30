@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,7 +19,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-def create_app() -> FastAPI:
+def create_app(frontend_dist: Path | None = None) -> FastAPI:
     settings = get_settings()
     # StaticFiles validates its directory during application construction,
     # before the lifespan hook runs. Create runtime-owned directories here so
@@ -48,8 +49,8 @@ def create_app() -> FastAPI:
     sample_dir = ROOT_DIR / "static" / "samples"
     if sample_dir.exists():
         application.mount("/samples", StaticFiles(directory=sample_dir), name="sample-files")
-    frontend_dist = ROOT_DIR / "frontend" / "dist"
-    assets_dir = frontend_dist / "assets"
+    resolved_frontend_dist = frontend_dist or ROOT_DIR / "frontend" / "dist"
+    assets_dir = resolved_frontend_dist / "assets"
     # Register the mount even when the frontend has not been built yet.  The
     # dist directory may be created after the API starts during development;
     # skipping the mount in that case makes asset requests fall through to the
@@ -62,7 +63,7 @@ def create_app() -> FastAPI:
 
     @application.get("/{path:path}", include_in_schema=False)
     async def vue_spa(path: str):
-        index = frontend_dist / "index.html"
+        index = resolved_frontend_dist / "index.html"
         if index.is_file():
             return FileResponse(index)
         raise HTTPException(status_code=503, detail="前端尚未构建，请运行 npm run build")
