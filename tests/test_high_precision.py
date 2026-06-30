@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from calibration.ruler import RulerReader
@@ -27,3 +29,15 @@ def test_symmetric_triplet_selection_ignores_unrelated_peaks():
     assert abs(peaks.negative - 342) <= 1
     assert abs(peaks.center - 380) <= 1
     assert abs(peaks.positive - 419) <= 1
+
+
+def test_reference_experiment_selects_three_adjacent_principal_fringes():
+    image_path = Path(__file__).resolve().parents[1] / "实验图片" / "实验图片 (1).jpg"
+    image = HighPrecisionDiffractionAnalyzer._load(image_path)
+    profile, _ = HighPrecisionDiffractionAnalyzer._profile(image)
+
+    peaks = HighPrecisionDiffractionAnalyzer._initial_triplet(profile)
+
+    assert abs(peaks.negative - 789) <= 2
+    assert abs(peaks.center - 828) <= 2
+    assert abs(peaks.positive - 862) <= 2

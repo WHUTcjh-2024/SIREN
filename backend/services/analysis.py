@@ -127,6 +127,36 @@ class DiffractionAnalysisService:
             }
         font_scale = max(0.55, image.shape[1] / 2200)
         thickness = max(1, round(image.shape[1] / 900))
+
+        # Draw OCR ruler anchors as amber dashed lines before the diffraction
+        # orders. Keeping the two annotation layers visually distinct makes it
+        # possible to verify both the pixel-to-centimetre calibration and the
+        # fringe localisation from a single result image.
+        if measurement:
+            ruler_color = (0, 190, 255)
+            anchors = sorted(
+                measurement.get("rulerDetections", []),
+                key=lambda item: item["value"],
+                reverse=True,
+            )
+            for anchor in anchors:
+                y = int(round(float(anchor["orig_y"])))
+                if not 0 <= y < image.shape[0]:
+                    continue
+                for x0 in range(0, image.shape[1], 28):
+                    x1 = min(x0 + 16, image.shape[1] - 1)
+                    cv2.line(image, (x0, y), (x1, y), ruler_color, thickness)
+                cv2.putText(
+                    image,
+                    f"{int(anchor['value'])} cm",
+                    (12, max(24, y - 8)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    ruler_color,
+                    thickness,
+                    cv2.LINE_AA,
+                )
+
         for key in ("center", "neg", "pos"):
             y = int(round(float(peaks[key]["pixel"])))
             cv2.line(image, (0, y), (image.shape[1], y), colors[key], 2)
