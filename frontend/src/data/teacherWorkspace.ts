@@ -9,6 +9,7 @@ export type TeacherSection =
   | "integrations";
 export type AlertStatus = "new" | "in_progress" | "resolved";
 export type TeacherDataSource = "demo" | "live";
+export type InterventionStatus = "draft" | "assigned" | "completed";
 
 export interface ActivityPoint {
   time: string;
@@ -105,8 +106,11 @@ export interface TeacherWorkspace {
     title: string;
     classId: string;
     alertIds: string[];
-    status: "draft" | "assigned" | "completed";
+    status: InterventionStatus;
     createdAt: string;
+    assignedAt?: string;
+    completedAt?: string;
+    completionNote?: string;
   }>;
   auditTrail: Array<{
     id: string;
@@ -141,30 +145,11 @@ export type TeacherWorkspaceLoad =
   | { status: "unavailable"; message: string };
 
 export const teacherDemoWorkspace = workspaceSeed as TeacherWorkspace;
-const teacherAccessCodeStorageKey = "siren.teacher-access-code";
-
-function getTeacherRequestHeaders(): HeadersInit | undefined {
-  try {
-    const accessCode = window.localStorage
-      .getItem(teacherAccessCodeStorageKey)
-      ?.trim();
-    return accessCode ? { "X-Teacher-Access-Code": accessCode } : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveTeacherAccessCode(accessCode: string) {
-  const normalized = accessCode.trim();
-  try {
-    if (normalized) {
-      window.localStorage.setItem(teacherAccessCodeStorageKey, normalized);
-    } else {
-      window.localStorage.removeItem(teacherAccessCodeStorageKey);
-    }
-  } catch {
-    // Private browsing may disable storage; the next request will simply require the code again.
-  }
+export async function createTeacherSession(accessCode: string): Promise<void> {
+  await api("/api/teacher/session", {
+    method: "POST",
+    body: JSON.stringify({ accessCode: accessCode.trim() }),
+  });
 }
 
 /**
@@ -185,7 +170,7 @@ export async function loadTeacherWorkspace(): Promise<TeacherWorkspaceLoad> {
     const response = await api<{
       data: TeacherWorkspace;
       source: TeacherDataSource;
-    }>("/api/teacher/workspace", { headers: getTeacherRequestHeaders() });
+    }>("/api/teacher/workspace");
     return {
       status: "ready",
       workspace: response.data,
@@ -213,7 +198,6 @@ export async function updateTeacherAlert(
     data: { alert: TeachingAlert; revision: number };
   }>(`/api/teacher/alerts/${encodeURIComponent(alertId)}`, {
     method: "PATCH",
-    headers: getTeacherRequestHeaders(),
     body: JSON.stringify({ status, expectedRevision }),
   });
   return response.data;
@@ -235,13 +219,27 @@ export async function createTeacherInterventionDraft(
     };
   }>("/api/teacher/interventions/drafts", {
     method: "POST",
-    headers: getTeacherRequestHeaders(),
     body: JSON.stringify({
       classId: classId === "all" ? null : classId,
       expectedRevision,
     }),
   });
   return { ...response.data.intervention, revision: response.data.revision };
+}
+
+export async function updateTeacherIntervention(
+  interventionId: string,
+  status: Exclude<InterventionStatus, "draft">,
+  expectedRevision: number,
+): Promise<{ revision: number }> {
+  const response = await api<{ data: { revision: number } }>(
+    `/api/teacher/interventions/${encodeURIComponent(interventionId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status, expectedRevision }),
+    },
+  );
+  return response.data;
 }
 
 export function getTeacherScope(

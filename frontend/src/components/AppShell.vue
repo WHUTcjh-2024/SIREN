@@ -8,7 +8,7 @@ const route = useRoute()
 const sidebarOpen = ref(false)
 const { state, hydrate } = useExperiment()
 const pageTitle = computed(() => String(route.meta.title || '实验主页'))
-const pageSubtitle = computed(() => String(route.meta.subtitle || 'AI + 物理实验 · 预习测验 → 静态实验 → 动态实验'))
+const pageSubtitle = computed(() => String(route.meta.subtitle || 'AI + 物理实验 · 预习测验 → 静态实验'))
 const active = (name: string) => route.name === name
 const openAssistant = () => window.dispatchEvent(new CustomEvent('siren:open-assistant'))
 onMounted(() => void hydrate().catch(() => undefined))
@@ -18,11 +18,11 @@ onMounted(() => void hydrate().catch(() => undefined))
   <button type="button" class="app-sidebar-toggle" aria-label="打开菜单" @click="sidebarOpen = !sidebarOpen"><i class="fa fa-bars" /></button>
   <div class="app-layout">
     <aside class="app-sidebar" :class="{ 'is-open': sidebarOpen }" aria-label="主导航">
-      <RouterLink to="/" class="app-sidebar-brand" title="基于SIREN与PINNs的液体表面张力系数AI高精度测量系统" @click="sidebarOpen = false">
+      <RouterLink to="/" class="app-sidebar-brand" title="基于 SIREN 约束拟合的液体表面张力 AI 辅助测量系统" @click="sidebarOpen = false">
         <div class="app-sidebar-brand-icon"><i class="fa fa-tint" /></div>
         <div class="app-sidebar-brand-copy">
-          <h1 class="app-sidebar-title">SIREN-PINNs智能系统</h1>
-          <p class="app-sidebar-meta">AI + 物理实验 · SIREN · PINNs · 衍射</p>
+          <h1 class="app-sidebar-title">SIREN 智能实验系统</h1>
+          <p class="app-sidebar-meta">AI + 物理实验 · 约束拟合 · 衍射</p>
         </div>
       </RouterLink>
 
@@ -50,15 +50,6 @@ onMounted(() => void hydrate().catch(() => undefined))
               <span class="app-nav-step">2</span><span class="app-nav-link-text"><strong>静态实验数据处理</strong><small>σ 计算 · 多组拟合</small></span>
             </RouterLink>
           </div>
-          <p class="app-nav-subgroup-label app-nav-subgroup-label--dynamic"><span>动态实验</span></p>
-          <div class="app-nav-flow app-nav-flow--dynamic">
-            <RouterLink to="/dynamic-video-capture" class="app-nav-link app-nav-link--flow app-nav-link--dynamic" :class="{ 'is-active': active('dynamic-capture') }" @click="sidebarOpen = false">
-              <span class="app-nav-step app-nav-step--dynamic">3</span><span class="app-nav-link-text"><strong>动态图像采集</strong><small>表面张力 σ · 变温衍射图</small></span>
-            </RouterLink>
-            <RouterLink to="/dynamic-data-processing" class="app-nav-link app-nav-link--flow app-nav-link--dynamic" :class="{ 'is-active': active('dynamic-processing') }" @click="sidebarOpen = false">
-              <span class="app-nav-step app-nav-step--dynamic">4</span><span class="app-nav-link-text"><strong>动态数据处理</strong><small>σ–T 关系 · 拟合与对比</small></span>
-            </RouterLink>
-          </div>
         </div>
         <div class="app-nav-divider" />
         <a href="#" class="app-nav-link app-nav-link--assistant" @click.prevent="openAssistant">
@@ -70,12 +61,10 @@ onMounted(() => void hydrate().catch(() => undefined))
         <span :class="{ 'is-on': active('home') }">主页</span><i class="fa fa-angle-right" />
         <span :class="{ 'is-on': active('quiz') }">测验</span><i class="fa fa-angle-right" />
         <span :class="{ 'is-on': active('capture') }">静采</span><i class="fa fa-angle-right" />
-        <span :class="{ 'is-on': active('processing') }">静处</span><i class="fa fa-angle-right" />
-        <span :class="{ 'is-on': active('dynamic-capture') }">动采</span><i class="fa fa-angle-right" />
-        <span :class="{ 'is-on': active('dynamic-processing') }">动处</span>
+        <span :class="{ 'is-on': active('processing') }">静处</span>
       </div>
       <div class="app-sidebar-deco"><div class="app-sidebar-deco-inner">
-        <div class="app-sidebar-tech-chips"><span>SIREN</span><span>PINNs</span><span>智慧星</span></div>
+        <div class="app-sidebar-tech-chips"><span>SIREN</span><span>先验正则</span><span>智慧星</span></div>
         <p class="app-sidebar-deco-note">AI 读图辅助 · 人工复核留痕</p>
       </div></div>
     </aside>
@@ -90,8 +79,8 @@ onMounted(() => void hydrate().catch(() => undefined))
       </header>
       <slot />
       <footer class="app-footer">
-        <span>© 2026 SIREN-PINNs智能系统</span>
-        <div><RouterLink to="/">实验主页</RouterLink><RouterLink to="/preview-quiz">预习测验</RouterLink><RouterLink to="/laser-diffraction">静态采集</RouterLink><RouterLink to="/data-processing">静态处理</RouterLink><RouterLink to="/dynamic-video-capture">动态图采</RouterLink><RouterLink to="/dynamic-data-processing">动态处理</RouterLink></div>
+        <span>© 2026 SIREN 智能实验系统</span>
+        <div><RouterLink to="/">实验主页</RouterLink><RouterLink to="/preview-quiz">预习测验</RouterLink><RouterLink to="/laser-diffraction">静态采集</RouterLink><RouterLink to="/data-processing">静态处理</RouterLink></div>
       </footer>
     </div>
   </div>

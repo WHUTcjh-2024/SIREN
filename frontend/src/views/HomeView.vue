@@ -21,11 +21,11 @@ const exportReport = () => window.print()
         <section class="home-hero home-hero--fit">
           <div class="home-hero-main">
             <span class="competition-hero-tag home-hero-track-tag">AI + 物理实验 · 2026</span>
-            <h2 class="home-hero-title">基于SIREN与PINNs的液体表面张力系数AI高精度测量系统</h2>
-            <p class="home-hero-sub">SIREN 神经隐式场 · PINNs 物理约束 · 亚像素条纹分析</p>
+            <h2 class="home-hero-title">基于 SIREN 约束拟合的液体表面张力 AI 辅助测量系统</h2>
+            <p class="home-hero-sub">SIREN 神经隐式场 · 光滑与弱对称先验 · 亚像素条纹分析</p>
             <ul class="home-hero-points competition-innovation-list">
               <li>SIREN 连续光强场亚像素寻峰</li>
-              <li>PINNs 物理约束保证表面张力 σ 一致性</li>
+              <li>显式先验正则抑制噪声伪峰，结果保留人工复核</li>
               <li>人机协同：预习—采集—计算全流程可追溯</li>
             </ul>
             <p v-if="!state.quizPassed" class="home-hero-gate"><i class="fa fa-exclamation-circle" /> 须先完成 <RouterLink to="/preview-quiz">预习测验</RouterLink> 并全部答对</p>
@@ -58,14 +58,14 @@ const exportReport = () => window.print()
             <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
             <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-indigo"><i class="fa fa-area-chart" /></span><span class="workflow-pipeline-num">02</span></div><h3>SIREN 拟合</h3><p>连续光强场 · 亚像素寻峰</p></article>
             <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
-            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-violet"><i class="fa fa-shield" /></span><span class="workflow-pipeline-num">03</span></div><h3>PINNs 约束</h3><p>色散关系与对称性</p></article>
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-violet"><i class="fa fa-shield" /></span><span class="workflow-pipeline-num">03</span></div><h3>先验正则</h3><p>光滑性与弱对称性</p></article>
             <div class="workflow-pipeline-link"><span class="workflow-pipeline-link-core"><i class="fa fa-long-arrow-right" /></span></div>
-            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-emerald"><i class="fa fa-calculator" /></span><span class="workflow-pipeline-num">04</span></div><h3>σ 计算拟合</h3><p>Kelvin 公式 · 多组验证</p></article>
+            <article class="workflow-pipeline-card" role="listitem"><div class="workflow-pipeline-top"><span class="workflow-pipeline-icon is-emerald"><i class="fa fa-calculator" /></span><span class="workflow-pipeline-num">04</span></div><h3>σ 计算拟合</h3><p>重力-毛细波色散 · 多组验证</p></article>
           </div>
           <div class="workflow-core-equations">
             <h3 class="workflow-core-title">核心方程</h3>
             <div class="workflow-equations-grid">
-              <div class="workflow-eq-item is-kelvin"><span class="workflow-eq-label">Kelvin</span><div class="formula-katex-display">σ = ρω² / k³</div></div>
+              <div class="workflow-eq-item is-kelvin"><span class="workflow-eq-label">色散</span><div class="formula-katex-display">ω² = (gk + σk³/ρ)tanh(kd)</div></div>
               <div class="workflow-eq-item is-delta"><span class="workflow-eq-label">衍射角差</span><div class="formula-katex-display">δ = β − α</div></div>
               <div class="workflow-eq-item is-k"><span class="workflow-eq-label">波数 k</span><div class="formula-katex-display formula-katex-display--sm">k ∝ sin(δ/2) sin α</div></div>
               <div class="workflow-eq-item is-error"><span class="workflow-eq-label">相对误差</span><div class="formula-katex-display formula-katex-display--sm">E = |σ−σ₀|/σ₀ × 100%</div></div>
@@ -82,8 +82,8 @@ const exportReport = () => window.print()
         <div class="rail-exp-list">
           <RouterLink to="/preview-quiz" class="rail-exp-item"><div class="rail-exp-thumb is-blue"><i class="fa fa-book" /></div><div class="rail-exp-body"><h4>预习测验</h4><p>实验前 · 5 题（单选 / 多选 / 判断）</p></div><span class="app-badge" :class="state.quizPassed ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.quizPassed) }}</span></RouterLink>
           <RouterLink to="/laser-diffraction" class="rail-exp-item"><div class="rail-exp-thumb is-blue"><i class="fa fa-video-camera" /></div><div class="rail-exp-body"><h4>激光衍射图像采集</h4><p>SIREN 条纹定位 · 输出 H₀、Δx</p></div><span class="app-badge" :class="state.measurement ? 'app-badge-green' : 'app-badge-amber'">{{ status(!!state.measurement) }}</span></RouterLink>
-          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-violet"><i class="fa fa-calculator" /></div><div class="rail-exp-body"><h4>表面张力计算</h4><p>σ = ρω²/k³ · 可导入采集结果</p></div><span class="app-badge" :class="state.calculations.length ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 0) }}</span></RouterLink>
-          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-green"><i class="fa fa-line-chart" /></div><div class="rail-exp-body"><h4>多组数据拟合</h4><p>ω = a · k³⁄² · 验证 σ</p></div><span class="app-badge" :class="state.calculations.length > 1 ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 1) }}</span></RouterLink>
+          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-violet"><i class="fa fa-calculator" /></div><div class="rail-exp-body"><h4>表面张力计算</h4><p>重力与有限液深修正 · 可导入采集结果</p></div><span class="app-badge" :class="state.calculations.length ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 0) }}</span></RouterLink>
+          <RouterLink to="/data-processing" class="rail-exp-item"><div class="rail-exp-thumb is-green"><i class="fa fa-line-chart" /></div><div class="rail-exp-body"><h4>多组数据拟合</h4><p>完整色散关系拟合 σ</p></div><span class="app-badge" :class="state.calculations.length > 1 ? 'app-badge-green' : 'app-badge-amber'">{{ status(state.calculations.length > 1) }}</span></RouterLink>
         </div>
         <div class="rail-exp-footer"><RouterLink to="/laser-diffraction" class="app-btn-primary rail-cta-btn"><i class="fa fa-arrow-right" /> 继续实验</RouterLink></div>
       </div>

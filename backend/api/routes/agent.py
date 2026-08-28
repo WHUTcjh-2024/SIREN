@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.api.deps import get_agent
+from backend.api.rate_limit import enforce_ai_rate_limit
 from backend.schemas.agent import AskRequest, SuggestionRequest
 from backend.services.agent import AgentUnavailableError, ExperimentAgent
 
@@ -9,7 +10,8 @@ router = APIRouter(tags=["agent"])
 
 
 @router.post("/ask")
-def ask(payload: AskRequest, agent: ExperimentAgent = Depends(get_agent)) -> dict:
+def ask(payload: AskRequest, _: None = Depends(enforce_ai_rate_limit),
+        agent: ExperimentAgent = Depends(get_agent)) -> dict:
     try:
         return agent.ask(payload)
     except AgentUnavailableError as exc:
@@ -17,7 +19,8 @@ def ask(payload: AskRequest, agent: ExperimentAgent = Depends(get_agent)) -> dic
 
 
 @router.post("/ask/stream")
-def ask_stream(payload: AskRequest, agent: ExperimentAgent = Depends(get_agent)) -> StreamingResponse:
+def ask_stream(payload: AskRequest, _: None = Depends(enforce_ai_rate_limit),
+               agent: ExperimentAgent = Depends(get_agent)) -> StreamingResponse:
     if not agent.available:
         raise HTTPException(status_code=503, detail="未配置 MIMO_API_KEY")
     return StreamingResponse(agent.stream(payload), media_type="text/event-stream",

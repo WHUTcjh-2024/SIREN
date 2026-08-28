@@ -16,12 +16,12 @@ class Trainer:
         self.optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
 
         self.mse = nn.MSELoss()
-        self.pinn_weight = config.get('pinn_weight', 0.01)
+        self.smoothness_weight = config.get('smoothness_weight', 0.01)
         self.symmetry_weight = config.get('symmetry_weight', 0.005)
         self.scheduler = None
         self.training_history = []
 
-    def _pinn_smoothness_loss(self, y_coords):
+    def _smoothness_loss(self, y_coords):
         y_in = y_coords.clone().detach().requires_grad_(True)
         I = self.model(y_in)
         dI = torch.autograd.grad(I, y_in, grad_outputs=torch.ones_like(I),
@@ -30,7 +30,7 @@ class Trainer:
                                   create_graph=True, retain_graph=True)[0]
         return (d2I ** 2).mean()
 
-    def _pinn_symmetry_loss(self, y_coords):
+    def _symmetry_loss(self, y_coords):
         y_in = y_coords.clone().detach().requires_grad_(True)
         I = self.model(y_in)
         y_neg = -y_in
@@ -44,10 +44,10 @@ class Trainer:
         predicted = self.model(y_coords)
         loss_mse = self.mse(predicted, observed)
 
-        loss_pinn = self._pinn_smoothness_loss(y_coords)
-        loss_sym = self._pinn_symmetry_loss(y_coords)
+        loss_smooth = self._smoothness_loss(y_coords)
+        loss_sym = self._symmetry_loss(y_coords)
 
-        total_loss = loss_mse + self.pinn_weight * loss_pinn + self.symmetry_weight * loss_sym
+        total_loss = loss_mse + self.smoothness_weight * loss_smooth + self.symmetry_weight * loss_sym
 
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
@@ -56,7 +56,7 @@ class Trainer:
         return {
             'total_loss': total_loss.item(),
             'loss_mse': loss_mse.item(),
-            'loss_pinn': loss_pinn.item(),
+            'loss_smooth': loss_smooth.item(),
             'loss_sym': loss_sym.item()
         }
 
@@ -92,7 +92,7 @@ class Trainer:
                 pbar.set_postfix({
                     'loss': f'{current_loss:.6f}',
                     'mse': f'{loss_dict["loss_mse"]:.6f}',
-                    'pinn': f'{loss_dict["loss_pinn"]:.6f}'
+                    'smooth': f'{loss_dict["loss_smooth"]:.6f}'
                 })
 
             if progress_callback:

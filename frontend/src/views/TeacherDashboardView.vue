@@ -19,6 +19,7 @@ const {
   selectedAlertId,
   savingAlertId,
   creatingDraft,
+  updatingInterventionId,
   notice,
   scope,
   classOptions,
@@ -30,6 +31,7 @@ const {
   submitAccessCode,
   saveAlert,
   createDraft,
+  advanceIntervention,
 } = useTeacherWorkspace();
 
 const activeSection = ref<TeacherSection>("overview");
@@ -285,6 +287,42 @@ onMounted(() => {
           >
             了解接入方案 →
           </button>
+        </section>
+
+        <section
+          v-if="workspace.interventions.length"
+          class="intervention-workflow"
+          aria-label="教师干预任务"
+        >
+          <header>
+            <strong>干预任务</strong
+            ><span>草稿 → 已下发 → 已完成，全程留痕</span>
+          </header>
+          <article v-for="item in workspace.interventions" :key="item.id">
+            <div>
+              <strong>{{ item.title }}</strong
+              ><small>{{ item.alertIds.length }} 项关注线索</small>
+            </div>
+            <span>{{
+              { draft: "草稿", assigned: "已下发", completed: "已完成" }[
+                item.status
+              ]
+            }}</span>
+            <button
+              v-if="item.status !== 'completed'"
+              class="button secondary"
+              type="button"
+              :disabled="updatingInterventionId === item.id"
+              @click="
+                advanceIntervention(
+                  item.id,
+                  item.status === 'draft' ? 'assigned' : 'completed',
+                )
+              "
+            >
+              {{ item.status === "draft" ? "确认下发" : "确认完成" }}
+            </button>
+          </article>
         </section>
 
         <div class="workspace-content">

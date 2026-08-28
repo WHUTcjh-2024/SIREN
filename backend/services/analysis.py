@@ -1,4 +1,5 @@
 import json
+import logging
 import shutil
 import tempfile
 import uuid
@@ -10,6 +11,7 @@ import numpy as np
 
 from backend.core.config import Settings
 ProgressCallback = Callable[[str, dict], None]
+logger = logging.getLogger(__name__)
 
 
 class DiffractionAnalysisService:
@@ -24,10 +26,11 @@ class DiffractionAnalysisService:
 
     def analyse(self, image_path: Path, progress: ProgressCallback | None = None) -> dict:
         # Heavy OCR/Torch dependencies are loaded only for an analysis request.
-        # The improved estimator uses a dimensionless SIREN coordinate and PINN
-        # regularisation centred on the optical axis.
+        # The estimator uses a dimensionless SIREN coordinate with smoothness
+        # and weak symmetry regularisation centred on the optical axis.
         from modules.high_precision import HighPrecisionDiffractionAnalyzer
 
+        self._prune_old_runs()
         run_id = uuid.uuid4().hex
         run_dir = self.settings.output_dir / "runs" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -80,10 +83,26 @@ class DiffractionAnalysisService:
             "quality": {
                 "sirenFitRmse": round(float(measurement["sirenFitRmse"]), 6),
                 "calibrationRmseCm": round(float(measurement["calibrationRmseCm"]), 6),
-                "method": "dimensionless-siren-pinn-v2",
+                "method": "dimensionless-siren-regularized-v2",
             },
             "runId": run_id,
         }
+
+    def _prune_old_runs(self) -> None:
+        runs_dir = self.settings.output_dir / "runs"
+        if not runs_dir.is_dir():
+            return
+        try:
+            directories = sorted(
+                (path for path in runs_dir.iterdir() if path.is_dir()),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            logger.warning("Unable to enumerate old analysis runs", exc_info=True)
+            return
+        for stale in directories[self.settings.max_saved_analysis_runs - 1 :]:
+            shutil.rmtree(stale, ignore_errors=True)
 
     def stream(self, image_path: Path) -> Iterator[str]:
         events: list[dict] = []
@@ -96,8 +115,13 @@ class DiffractionAnalysisService:
             for event in events:
                 yield json.dumps(event, ensure_ascii=False) + "\n"
             yield json.dumps({"event": "result", "data": {"success": True, "data": result}}, ensure_ascii=False) + "\n"
-        except Exception as exc:
+        except ValueError as exc:
             yield json.dumps({"event": "error", "data": {"message": f"分析失败: {exc}"}}, ensure_ascii=False) + "\n"
+        except Exception:
+            logger.exception("Unexpected analysis failure")
+            yield json.dumps(
+                {"event": "error", "data": {"message": "分析服务内部错误"}}, ensure_ascii=False
+            ) + "\n"
 
     def _url(self, path: Path) -> str:
         relative = path.relative_to(self.settings.output_dir).as_posix()

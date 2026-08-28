@@ -3,8 +3,9 @@ import {
   createTeacherInterventionDraft,
   getTeacherScope,
   loadTeacherWorkspace,
-  saveTeacherAccessCode,
+  createTeacherSession,
   updateTeacherAlert,
+  updateTeacherIntervention,
   type AlertStatus,
   type TeacherWorkspace,
 } from "../data/teacherWorkspace";
@@ -21,6 +22,7 @@ export function useTeacherWorkspace() {
   const selectedAlertId = ref("");
   const savingAlertId = ref("");
   const creatingDraft = ref(false);
+  const updatingInterventionId = ref("");
   const notice = ref("");
 
   const scope = computed(() =>
@@ -93,8 +95,15 @@ export function useTeacherWorkspace() {
   }
 
   async function submitAccessCode() {
-    saveTeacherAccessCode(accessCode.value);
-    return refresh();
+    error.value = "";
+    try {
+      await createTeacherSession(accessCode.value);
+      accessCode.value = "";
+      return refresh();
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : "教师登录失败";
+      return false;
+    }
   }
 
   async function saveAlert(status: AlertStatus) {
@@ -114,7 +123,7 @@ export function useTeacherWorkspace() {
       notice.value =
         status === "resolved"
           ? "已保存为“已处理”，并记录操作时间与教师身份。"
-          : "已保存到教师干预清单，可在后续版本中下发给学生。";
+          : "已保存到教师干预清单，可创建任务后确认下发。";
     } catch (cause) {
       if (cause instanceof Error && "status" in cause && cause.status === 409) {
         await refresh();
@@ -160,6 +169,36 @@ export function useTeacherWorkspace() {
     }
   }
 
+  async function advanceIntervention(
+    interventionId: string,
+    status: "assigned" | "completed",
+  ) {
+    const currentWorkspace = workspace.value;
+    if (!currentWorkspace || transport.value !== "api") return;
+    updatingInterventionId.value = interventionId;
+    notice.value = "";
+    try {
+      await updateTeacherIntervention(
+        interventionId,
+        status,
+        currentWorkspace.revision,
+      );
+      if (!(await refresh())) return;
+      notice.value =
+        status === "assigned"
+          ? "干预任务已下发并记录操作人和时间。"
+          : "干预任务已完成并写入审计记录。";
+    } catch (cause) {
+      if (cause instanceof Error && "status" in cause && cause.status === 409) {
+        await refresh();
+      }
+      notice.value =
+        cause instanceof Error ? cause.message : "更新干预任务失败";
+    } finally {
+      updatingInterventionId.value = "";
+    }
+  }
+
   return {
     workspace,
     source,
@@ -172,6 +211,7 @@ export function useTeacherWorkspace() {
     selectedAlertId,
     savingAlertId,
     creatingDraft,
+    updatingInterventionId,
     notice,
     scope,
     classOptions,
@@ -183,5 +223,6 @@ export function useTeacherWorkspace() {
     submitAccessCode,
     saveAlert,
     createDraft,
+    advanceIntervention,
   };
 }

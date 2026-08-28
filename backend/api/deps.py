@@ -20,6 +20,7 @@ def get_agent() -> ExperimentAgent:
 def get_teacher_workspace_store() -> TeacherWorkspaceStore:
     settings = get_settings()
     return TeacherWorkspaceStore(
-        workspace_file=settings.teacher_workspace_file,
+        db_file=settings.teacher_workspace_db_file,
         seed_file=settings.teacher_workspace_seed_file,
+        legacy_file=settings.teacher_workspace_file,
     )

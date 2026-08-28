@@ -2179,6 +2179,37 @@
 .teacher-workspace button:not(:disabled):hover {
   filter: brightness(0.985);
 }
+
+.intervention-workflow {
+  margin: 0 28px 18px;
+  padding: 14px 16px;
+  border: 1px solid #d8e0ec;
+  border-radius: 12px;
+  background: #fff;
+}
+.intervention-workflow header,
+.intervention-workflow article {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.intervention-workflow header {
+  margin-bottom: 10px;
+}
+.intervention-workflow header span,
+.intervention-workflow article small {
+  color: #64748b;
+  font-size: 12px;
+}
+.intervention-workflow article {
+  padding: 9px 0;
+  border-top: 1px solid #eef2f7;
+}
+.intervention-workflow article div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
 .priority-copy strong,
 .class-copy strong,
 .table-row > span strong,

@@ -1,9 +1,9 @@
-"""High-precision SIREN/PINN fringe and ruler measurement.
+"""SIREN regularized fringe and ruler measurement.
 
 The estimator keeps the neural implicit representation, but fixes the coordinate
 system used by the original pipeline: the local fringe coordinate is centred on
-the optical axis and scaled by the first-order spacing.  PINN regularisation is
-therefore applied to a physically meaningful, dimensionless coordinate.
+the optical axis and scaled by the first-order spacing. Smoothness and weak
+bilateral symmetry are explicit priors, not a governing-equation PINN.
 """
 
 from __future__ import annotations
@@ -148,9 +148,8 @@ class HighPrecisionDiffractionAnalyzer:
         config = {
             "learning_rate": 1.2e-3,
             "weight_decay": 1e-7,
-            # Smooth optical intensity and weak bilateral symmetry are the PINN
-            # constraints. The weak symmetry weight does not force equal sides.
-            "pinn_weight": 2.0e-5,
+            # The weak symmetry weight does not force equal sides.
+            "smoothness_weight": 2.0e-5,
             "symmetry_weight": 8.0e-4,
             "early_stopping_patience": 90,
             "early_stopping_min_delta": 2e-7,
@@ -234,7 +233,7 @@ class HighPrecisionDiffractionAnalyzer:
         peaks, fit_rmse = self._siren_refine(profile, initial, progress)
         if progress:
             progress("step", {"step": 3, "status": "done"})
-            progress("step", {"step": 4, "status": "start", "message": "PINN 约束与亚像素极值定位"})
+            progress("step", {"step": 4, "status": "start", "message": "先验正则与亚像素极值定位"})
         if progress:
             progress("step", {"step": 4, "status": "done"})
             progress("step", {"step": 5, "status": "start", "message": "换算物理量与不确定度"})

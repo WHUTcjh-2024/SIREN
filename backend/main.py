@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import agent, analysis, experiments, health, samples, teacher
 from backend.core.config import ROOT_DIR, get_settings
+from backend.core.middleware import RequestBodyLimitMiddleware
 
 
 @asynccontextmanager
@@ -21,6 +22,7 @@ async def lifespan(_: FastAPI):
 
 def create_app(frontend_dist: Path | None = None) -> FastAPI:
     settings = get_settings()
+    settings.validate()
     # StaticFiles validates its directory during application construction,
     # before the lifespan hook runs. Create runtime-owned directories here so
     # importing the ASGI app also works in a clean checkout and in CI.
@@ -29,15 +31,19 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     application = FastAPI(
         title="SIREN Experiment API",
         version="2.0.0",
-        description="SIREN/PINN diffraction analysis and RAG experiment agent",
+        description="SIREN regularized diffraction analysis and RAG experiment agent",
         lifespan=lifespan,
     )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.siren_cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Content-Type"],
+    )
+    application.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=settings.max_upload_bytes + 1024 * 1024,
     )
     application.include_router(health.router)
     application.include_router(experiments.router, prefix="/api")
@@ -76,6 +82,17 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     @application.exception_handler(ValueError)
     async def value_error(_: Request, exc: ValueError):
         return JSONResponse(status_code=400, content={"success": False, "message": str(exc)})
+
+    @application.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Permissions-Policy"] = "camera=(self), microphone=()"
+        if settings.is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        return response
 
     return application
 

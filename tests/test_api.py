@@ -7,7 +7,10 @@ client = TestClient(app)
 
 
 def test_health():
-    assert client.get("/health").json() == {"status": "ok", "service": "siren-api"}
+    response = client.get("/health")
+    assert response.json() == {"status": "ok", "service": "siren-api"}
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
 
 
 def test_vue_spa_is_served_by_fastapi(tmp_path):
@@ -29,3 +32,31 @@ def test_calculate_validates_input():
 def test_agent_requires_external_key(monkeypatch):
     response = client.post("/api/ask", json={"question": "什么是衍射？"})
     assert response.status_code == 503
+
+
+def test_analysis_rejects_multiple_or_invalid_images():
+    multiple = client.post(
+        "/api/laser-diffraction",
+        files=[("images", ("a.png", b"x", "image/png")), ("images", ("b.png", b"x", "image/png"))],
+    )
+    assert multiple.status_code == 400
+    invalid = client.post(
+        "/api/laser-diffraction", files={"images": ("a.png", b"not-an-image", "image/png")}
+    )
+    assert invalid.status_code == 415
+
+
+def test_client_cannot_choose_experiment_session_id():
+    response = client.post(
+        "/api/experiment-state", json={"sid": "chosen", "state": {"progress": 1}}
+    )
+    assert response.status_code == 422
+
+
+def test_request_body_limit_rejects_oversized_content_length():
+    response = client.post(
+        "/api/experiment-state",
+        content=b"{}",
+        headers={"Content-Length": str(32 * 1024 * 1024)},
+    )
+    assert response.status_code == 413

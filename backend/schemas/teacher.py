@@ -5,6 +5,8 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 AlertStatus = Literal["new", "in_progress", "resolved"]
+InterventionStatus = Literal["draft", "assigned", "completed"]
+WorkflowStatus = AlertStatus | InterventionStatus
 TeacherDataSource = Literal["demo", "live"]
 AlertType = Literal["concept", "data", "progress", "device"]
 AlertLevel = Literal["high", "medium", "low"]
@@ -14,13 +16,24 @@ StageStatus = Literal["complete", "active", "pending"]
 
 
 class TeacherActor(BaseModel):
-    """Temporary local actor contract; replace with SSO-backed identity in deployment."""
+    """Authenticated local-pilot identity stored in a signed HTTP-only session."""
 
     id: str = Field(min_length=1, max_length=64)
     display_name: str = Field(min_length=1, max_length=80)
 
 
+class TeacherSessionWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    access_code: str = Field(
+        max_length=256,
+        validation_alias=AliasChoices("accessCode", "access_code"),
+    )
+
+
 class AlertStatusWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     status: AlertStatus
     note: str | None = Field(default=None, max_length=500)
     expected_revision: int = Field(
@@ -30,12 +43,25 @@ class AlertStatusWrite(BaseModel):
 
 
 class InterventionDraftWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     class_id: str | None = Field(
         default=None,
         max_length=64,
         validation_alias=AliasChoices("classId", "class_id"),
     )
     title: str | None = Field(default=None, max_length=120)
+    expected_revision: int = Field(
+        ge=0,
+        validation_alias=AliasChoices("expectedRevision", "expected_revision"),
+    )
+
+
+class InterventionStatusWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["assigned", "completed"]
+    note: str | None = Field(default=None, max_length=500)
     expected_revision: int = Field(
         ge=0,
         validation_alias=AliasChoices("expectedRevision", "expected_revision"),
@@ -49,10 +75,16 @@ class AuditEntry(BaseModel):
     timestamp: datetime
     actor_id: str = Field(alias="actorId")
     actor_name: str = Field(alias="actorName")
-    action: Literal["alert_status_updated", "intervention_draft_created"]
+    action: Literal[
+        "alert_status_updated",
+        "intervention_draft_created",
+        "intervention_assigned",
+        "intervention_completed",
+        "workspace_imported",
+    ]
     entity_id: str = Field(alias="entityId")
-    previous_status: AlertStatus | None = Field(default=None, alias="previousStatus")
-    next_status: AlertStatus | None = Field(default=None, alias="nextStatus")
+    previous_status: WorkflowStatus | None = Field(default=None, alias="previousStatus")
+    next_status: WorkflowStatus | None = Field(default=None, alias="nextStatus")
     note: str | None = None
 
 
@@ -142,9 +174,12 @@ class InterventionDraft(BaseModel):
     title: str
     class_id: str = Field(alias="classId")
     alert_ids: list[str] = Field(alias="alertIds")
-    status: Literal["draft", "assigned", "completed"]
+    status: InterventionStatus
     created_at: str = Field(alias="createdAt")
     created_by: dict[str, str] = Field(alias="createdBy")
+    assigned_at: str | None = Field(default=None, alias="assignedAt")
+    completed_at: str | None = Field(default=None, alias="completedAt")
+    completion_note: str | None = Field(default=None, alias="completionNote")
 
 
 class TeacherKpis(BaseModel):

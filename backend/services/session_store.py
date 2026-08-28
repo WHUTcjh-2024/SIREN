@@ -1,5 +1,6 @@
 import json
-import re
+import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -12,13 +13,17 @@ class SessionStore:
 
     def __init__(self, directory: Path):
         self.directory = directory
+        self._lock = threading.RLock()
 
     @staticmethod
     def _safe_sid(sid: str) -> str:
-        safe = re.sub(r"[^a-zA-Z0-9_-]", "", sid)[:64]
-        if not safe:
+        try:
+            parsed = uuid.UUID(sid)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError("invalid session id") from exc
+        if str(parsed) != sid.lower():
             raise ValueError("invalid session id")
-        return safe
+        return str(parsed)
 
     @staticmethod
     def sanitize(state: dict[str, Any]) -> dict[str, Any]:
@@ -37,11 +42,18 @@ class SessionStore:
             return {}
 
     def write(self, sid: str, state: dict[str, Any]) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
-        target = self._path(sid)
-        temporary = target.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.sanitize(state), ensure_ascii=False), encoding="utf-8")
-        temporary.replace(target)
+        with self._lock:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            target = self._path(sid)
+            temporary = target.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            try:
+                temporary.write_text(
+                    json.dumps(self.sanitize(state), ensure_ascii=False), encoding="utf-8"
+                )
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
 
     def delete(self, sid: str) -> None:
-        self._path(sid).unlink(missing_ok=True)
+        with self._lock:
+            self._path(sid).unlink(missing_ok=True)

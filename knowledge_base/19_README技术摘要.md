@@ -1,10 +1,10 @@
 # 系统技术摘要（辅）
 
-## 测量精度（理想条件）
-峰值定位约 0.0001 px 量级；标定后几何量约 0.0001 cm 量级；较粗糙手读显著减小随机误差。单张含训练约数十秒。
+## 测量能力边界
+系统输出连续坐标峰位和标定残差，但输出小数位不代表测量精度。当前仓库尚无足量、带参考真值的跨设备盲测数据，不声明固定精度。交付前应使用 `scripts/benchmark_measurement.py` 对真实样本计算误差、失败率和耗时。
 
 ## 技术栈（实现）
-PyTorch、SIREN、PINNs 约束、EasyOCR、OpenCV、FastAPI、Vue、SSE、MIMO API、RAG。
+PyTorch、SIREN、先验正则、EasyOCR、OpenCV、FastAPI、Vue、SSE、MIMO API、RAG。
 
 ## 目录
 `modules/high_precision.py` 测量核心；`backend/` API；`frontend/` 展示端；`knowledge_base/` 本库；`rag/` 检索。

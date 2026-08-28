@@ -25,7 +25,7 @@ const analysing = ref(false)
 const elapsed = ref(0)
 const error = ref('')
 const steps = ref(Array.from({ length: 6 }, (_, index) => ({
-  label: ['预处理', '标尺识别', '光强提取', 'SIREN 拟合', 'PINN 优化', '结果输出'][index],
+  label: ['预处理', '标尺识别', '光强提取', 'SIREN 拟合', '先验正则', '结果输出'][index],
   status: 'pending' as StepStatus
 })))
 const stageMeta = [
@@ -33,7 +33,7 @@ const stageMeta = [
   { code: '02 / OCR MAPPING', title: '标尺识别', description: '检测标尺区域，建立像素到厘米映射', metrics: ['EasyOCR', '刻度线检测', 'px/cm 标定'] },
   { code: '03 / PROFILE', title: '光强提取', description: '沿中心轴采样，生成连续光强剖面', metrics: ['中心轴采样', '峰值增强', '连续曲线'] },
   { code: '04 / SIREN FIELD', title: 'SIREN 拟合', description: '用神经隐式场重建连续光强分布', metrics: ['正弦激活', '连续坐标场', '迭代收敛'] },
-  { code: '05 / PINN', title: 'PINN 优化', description: '加入对称性与光滑性物理约束', metrics: ['对称约束', '光滑性约束', '残差下降'] },
+  { code: '05 / PRIORS', title: '先验正则', description: '加入弱对称性与光滑性正则', metrics: ['弱对称先验', '光滑性先验', '残差下降'] },
   { code: '06 / MEASURE', title: '结果输出', description: '定位中央峰与 ±1 级峰，换算 H₀ 和 Δx', metrics: ['亚像素寻峰', 'H₀', 'Δx₁ / Δx₂'] }
 ]
 const analysisDuration = 8
@@ -339,7 +339,7 @@ onBeforeUnmount(() => { stopCamera(); stopVisionAnimation(); releasePreview() })
   <div class="app-body app-body--capture"><div class="app-content"><div class="capture-page vue-migrated-page">
     <header class="capture-page-head">
       <div class="capture-breadcrumb"><RouterLink to="/">首页</RouterLink> / 图像采集</div>
-      <div class="capture-title-row"><div><h2>激光衍射测量</h2><div class="capture-tags"><span class="capture-tag">SIREN 神经隐式场</span><span class="capture-tag capture-tag-violet">PINNs 物理约束</span><span class="capture-tag capture-tag-mint">亚像素级高精度</span></div></div></div>
+      <div class="capture-title-row"><div><h2>激光衍射测量</h2><div class="capture-tags"><span class="capture-tag">SIREN 神经隐式场</span><span class="capture-tag capture-tag-violet">显式先验正则</span><span class="capture-tag capture-tag-mint">连续坐标寻峰</span></div></div></div>
     </header>
 
     <section class="capture-card">
@@ -377,20 +377,20 @@ onBeforeUnmount(() => { stopCamera(); stopVisionAnimation(); releasePreview() })
       <header class="ai-vision-head"><div class="ai-vision-brand"><span><i class="fa fa-microchip" /></span><div><b>AI 图像理解工作台</b><small>实时展示当前图片的处理过程与计算负载</small></div></div><div class="ai-vision-head-right"><div class="ai-work-total"><span>累计处理单元</span><b>{{ accumulatedWork }}</b></div><div class="ai-vision-progress"><b>{{ Math.round(analysisProgress) }}%</b><span><i :style="{ width: `${analysisProgress}%` }" /></span><em>{{ elapsed.toFixed(1) }}s</em></div></div></header>
       <div class="ai-vision-workspace">
         <div class="ai-vision-canvas"><canvas ref="visionCanvas" /><span class="ai-vision-live"><i /> LIVE PROCESSING</span><span class="ai-vision-frame">{{ frameSize }}</span></div>
-        <aside class="ai-vision-inspector"><span class="ai-vision-code">{{ activeStage.code }}</span><h3>{{ activeStage.title }}</h3><p>{{ activeStage.description }}</p><div class="ai-vision-divider" /><span class="ai-workload-title">STAGE WORKLOAD</span><div class="ai-workload"><div v-for="item in workload" :key="item.label"><p><span>{{ item.label }}</span><b>{{ item.value }}</b></p><i><em :style="{ width: `${item.ratio * 100}%` }" /></i></div></div><ul class="ai-stage-tags"><li v-for="metric in activeStage.metrics" :key="metric">{{ metric }}</li></ul><div class="ai-vision-model"><span>ACTIVE MODEL</span><b>{{ activeStageIndex < 2 ? 'CV + EasyOCR' : activeStageIndex < 4 ? 'SIREN' : 'SIREN + PINN' }}</b></div></aside>
+        <aside class="ai-vision-inspector"><span class="ai-vision-code">{{ activeStage.code }}</span><h3>{{ activeStage.title }}</h3><p>{{ activeStage.description }}</p><div class="ai-vision-divider" /><span class="ai-workload-title">STAGE WORKLOAD</span><div class="ai-workload"><div v-for="item in workload" :key="item.label"><p><span>{{ item.label }}</span><b>{{ item.value }}</b></p><i><em :style="{ width: `${item.ratio * 100}%` }" /></i></div></div><ul class="ai-stage-tags"><li v-for="metric in activeStage.metrics" :key="metric">{{ metric }}</li></ul><div class="ai-vision-model"><span>ACTIVE MODEL</span><b>{{ activeStageIndex < 2 ? 'CV + EasyOCR' : activeStageIndex < 4 ? 'SIREN' : 'SIREN + PRIORS' }}</b></div></aside>
       </div>
       <ol class="ai-vision-timeline"><li v-for="(step,index) in steps" :key="step.label" :class="step.status"><span>{{ step.status === 'done' ? '✓' : index + 1 }}</span><div><b>{{ step.label }}</b><small>{{ ['灰度降噪','OCR 标定','中心轴采样','连续场重建','物理约束','峰值换算'][index] }}</small></div></li></ol>
     </section>
 
     <section v-else-if="file || result" class="card original-panel analysis-progress">
-      <div class="panel-heading"><span class="panel-icon"><i class="fa fa-microchip" /></span><div><h3>AI 赋能物理实验流程</h3><p>SIREN · PINNs · EasyOCR</p></div></div>
+      <div class="panel-heading"><span class="panel-icon"><i class="fa fa-microchip" /></span><div><h3>AI 赋能物理实验流程</h3><p>SIREN · 先验正则 · EasyOCR</p></div></div>
       <ol class="pipeline horizontal"><li v-for="(step,index) in steps" :key="step.label" :class="step.status"><i>{{ step.status === 'done' ? '✓' : index + 1 }}</i><span><b>{{ step.label }}</b><small>{{ step.status === 'start' ? '处理中' : step.status === 'done' ? '已完成' : '等待执行' }}</small></span></li></ol>
     </section>
 
     <section v-if="result" class="capture-results-main">
       <div class="capture-results-main-head"><div class="capture-results-main-title"><i class="fa fa-check-circle" /><div>分析完成<p>SIREN 亚像素峰值定位与标尺换算结果</p></div></div><button class="btn-go-process-main" @click="router.push('/data-processing')"><i class="fa fa-arrow-right" /> 导入数据处理</button></div>
       <div class="capture-results-main-grid"><div class="capture-result-card"><div class="result-label">中央峰高度 H₀</div><div class="result-badge">{{ result.H0 ?? '—' }} cm</div><small>中心 {{ result.centerPx ?? '—' }} px</small></div><div class="capture-result-card"><div class="result-label">正一级间距 Δx₁</div><div class="result-badge">{{ result.deltaX1 ?? '—' }} cm</div><small>{{ result.deltaX1_px ?? '—' }} px</small></div><div class="capture-result-card"><div class="result-label">负一级间距 Δx₂</div><div class="result-badge">{{ result.deltaX2 ?? '—' }} cm</div><small>{{ result.deltaX2_px ?? '—' }} px</small></div><div class="capture-result-card capture-result-card--hero"><div class="result-label">平均间距 Δx</div><div class="result-badge">{{ result.avgDeltaX ?? '—' }} cm</div><small>{{ result.pxPerCm ?? '—' }} px/cm</small></div></div>
-      <div v-if="result.quality" class="capture-quality"><span><i class="fa fa-check-circle" /> SIREN/PINN 连续场拟合</span><span>拟合 RMSE {{ result.quality.sirenFitRmse }}</span><span>标尺 RMSE {{ result.quality.calibrationRmseCm }} cm</span></div>
+      <div v-if="result.quality" class="capture-quality"><span><i class="fa fa-check-circle" /> SIREN 约束连续场拟合</span><span>拟合 RMSE {{ result.quality.sirenFitRmse }}</span><span>标尺 RMSE {{ result.quality.calibrationRmseCm }} cm</span></div>
       <div class="visual-grid capture-result-visuals"><article v-if="result.annotatedImage" class="visual"><h3>峰值与刻度标注</h3><img :src="result.annotatedImage" alt="分析标注图" /></article><article v-if="result.intensityProfile" class="visual"><h3>连续光强剖面</h3><img :src="result.intensityProfile" alt="光强剖面" /></article></div>
     </section>
   </div></div></div>

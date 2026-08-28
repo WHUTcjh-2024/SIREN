@@ -21,4 +21,5 @@ teacher-review-desktop.png
 data/experiment_sessions/
 data/teacher_workspace.json
 data/teacher_workspace.tmp
+data/teacher_workspace.sqlite3*
 *.log

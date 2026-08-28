@@ -14,7 +14,7 @@ class AskRequest(BaseModel):
 
 
 class SuggestionRequest(BaseModel):
-    question: str = ""
-    answer: str = ""
-    page: str = ""
+    question: str = Field(default="", max_length=2000)
+    answer: str = Field(default="", max_length=4000)
+    page: str = Field(default="", max_length=200)
     experiment_done: bool | None = None

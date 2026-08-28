@@ -1,7 +1,7 @@
 """Runtime configuration for the RAG assistant.
 
 The measurement pipeline is configured in `modules/high_precision.py`.  Keep
-this file focused on assistant settings so there is a single visible SIREN/PINN
+this file focused on assistant settings so there is a single visible SIREN
 implementation in the codebase.
 """
 

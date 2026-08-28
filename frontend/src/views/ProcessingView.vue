@@ -4,8 +4,8 @@ import { api } from '../api/client'
 import { useExperiment } from '../composables/useExperiment'
 
 const { state } = useExperiment()
-const form = reactive({ f: 50, delta_X_cm: state.measurement?.avgDeltaX || 1, H0: state.measurement?.H0 || 20, h: 5, L: 100, rho: 1000, sigma0: 0.072 })
-const result = ref<Record<string, number | null>>()
+const form = reactive({ f: 50, delta_X_cm: state.measurement?.avgDeltaX || 0.075, H0: state.measurement?.H0 || 20, h: 5, L: 100, rho: 1000, sigma0: 0.072, fluid_depth_cm: 2 })
+const result = ref<Record<string, any>>()
 const fit = ref<Record<string, any>>()
 const error = ref('')
 const rows = computed(() => state.calculations)
@@ -13,7 +13,7 @@ const rows = computed(() => state.calculations)
 async function calculate() {
   error.value = ''
   try {
-    const response = await api<{ data: Record<string, number> }>('/api/calculate', { method: 'POST', body: JSON.stringify(form) })
+    const response = await api<{ data: Record<string, any> }>('/api/calculate', { method: 'POST', body: JSON.stringify(form) })
     result.value = response.data
     state.calculations.push({ f: form.f, k: response.data.k, sigma: response.data.sigma })
     state.progress = Math.max(state.progress, 80)
@@ -23,7 +23,7 @@ async function runFit() {
   error.value = ''
   try {
     const response = await api<{ data: Record<string, any> }>('/api/fit', {
-      method: 'POST', body: JSON.stringify({ experiment_data: rows.value.map(({ f, k }) => ({ f, k })), rho: form.rho, sigma0: form.sigma0 })
+      method: 'POST', body: JSON.stringify({ experiment_data: rows.value.map(({ f, k }) => ({ f, k })), rho: form.rho, sigma0: form.sigma0, fluid_depth_cm: form.fluid_depth_cm })
     })
     fit.value = response.data
     state.progress = 100
@@ -54,9 +54,9 @@ function remove(index: number) { state.calculations.splice(index, 1) }
       </div>
       <div class="formula-grid">
         <article>
-          <b><i>1</i> Kelvin 公式</b>
-          <div>σ = ρ ω² / k³</div>
-          <p>ρ 液体密度，ω = 2πf 角频率，k 波数</p>
+          <b><i>1</i> 重力-毛细波色散</b>
+          <div>ω² = (gk + σk³/ρ) tanh(kd)</div>
+          <p>d 为液深；未提供时采用深水近似 tanh(kd) ≈ 1</p>
         </article>
         <article>
           <b><i>2</i> 衍射角度</b>
@@ -93,6 +93,7 @@ function remove(index: number) { state.calculations.splice(index, 1) }
         <label>液面基准 h <span><input v-model.number="form.h" type="number" step="0.01" /> cm</span></label>
         <label>屏距 L <span><input v-model.number="form.L" type="number" min="0" /> cm</span></label>
         <label>密度 ρ <span><input v-model.number="form.rho" type="number" min="0" /> kg/m³</span></label>
+        <label>液体深度 d <span><input v-model.number="form.fluid_depth_cm" type="number" min="0" step="0.1" /> cm</span></label>
         <label>参考表面张力 σ₀ <span><input v-model.number="form.sigma0" type="number" min="0" step="0.001" /> N/m</span></label>
       </div>
       <div class="center-action">
@@ -117,9 +118,9 @@ function remove(index: number) { state.calculations.splice(index, 1) }
           <small>N/m</small>
         </article>
         <article class="card">
-          <span>相对误差</span>
-          <b>{{ result.relative_error ?? '—' }}</b>
-          <small>%</small>
+          <span>重力贡献</span>
+          <b>{{ (result.gravity_fraction * 100).toFixed(2) }}</b>
+          <small>% · 相对误差 {{ result.relative_error ?? '—' }}%</small>
         </article>
       </div>
     </section>
@@ -173,7 +174,7 @@ function remove(index: number) { state.calculations.splice(index, 1) }
         <span class="eyebrow">Fit Result</span>
         <h3>拟合结果</h3>
         <div>
-          <span>指数</span>
+          <span>原始对数斜率（诊断）</span>
           <b>{{ fit.slope }}</b>
         </div>
         <div>
