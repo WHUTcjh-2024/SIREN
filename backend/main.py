@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes import agent, analysis, experiments, health, samples
+from backend.api.routes import agent, analysis, experiments, health, samples, teacher
 from backend.core.config import ROOT_DIR, get_settings
 
 
@@ -44,6 +44,7 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     application.include_router(agent.router, prefix="/api")
     application.include_router(analysis.router, prefix="/api")
     application.include_router(samples.router, prefix="/api")
+    application.include_router(teacher.router, prefix="/api")
     application.mount("/static", StaticFiles(directory=ROOT_DIR / "static"), name="static")
     application.mount("/output", StaticFiles(directory=settings.output_dir), name="output")
     sample_dir = ROOT_DIR / "static" / "samples"

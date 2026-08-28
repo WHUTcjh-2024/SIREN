@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -10,6 +12,13 @@ htmlcov/
 .vscode/
 frontend/node_modules/
 frontend/dist/
+*.tsbuildinfo
 output/
+outputs/
+.playwright-mcp/
+.runlogs/
+teacher-review-desktop.png
 data/experiment_sessions/
+data/teacher_workspace.json
+data/teacher_workspace.tmp
 *.log

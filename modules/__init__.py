@@ -1,4 +1,5 @@
-# 数据处理模块
-from .data_loader import DiffractionDataLoader, load_and_process_image
+"""Measurement modules used by the FastAPI application."""
 
-__all__ = ['DiffractionDataLoader', 'load_and_process_image']
+from .high_precision import HighPrecisionDiffractionAnalyzer
+
+__all__ = ["HighPrecisionDiffractionAnalyzer"]

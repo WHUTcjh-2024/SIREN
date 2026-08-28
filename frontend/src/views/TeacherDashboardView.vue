@@ -1,198 +1,890 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from "vue";
+import type {
+  TeacherSection,
+  TeachingAlert,
+  TeacherWorkspace,
+} from "../data/teacherWorkspace";
+import { useTeacherWorkspace } from "../composables/useTeacherWorkspace";
 
-type ClassKey = 'all' | 'class1' | 'class2'
-type ExperimentKey = 'surface' | 'diffraction'
+const {
+  workspace,
+  source,
+  transport,
+  loading,
+  error,
+  accessRequired,
+  accessCode,
+  selectedClassId,
+  selectedAlertId,
+  savingAlertId,
+  creatingDraft,
+  notice,
+  scope,
+  classOptions,
+  actionableAlerts,
+  activeAlert,
+  displayKpis,
+  peakActivity,
+  refresh,
+  submitAccessCode,
+  saveAlert,
+  createDraft,
+} = useTeacherWorkspace();
 
-const selectedClass = ref<ClassKey>('all')
-const selectedExperiment = ref<ExperimentKey>('surface')
-const isLive = ref(true)
-const now = ref(new Date())
-const activeStudents = ref(37)
-const aiRate = ref(8.6)
-const conversationDelta = ref(0)
-const pulse = ref([26, 31, 28, 38, 44, 40, 52, 47, 58, 62, 55, 66, 61, 70])
-const questionCursor = ref(0)
-const eventCursor = ref(0)
-const updateVersion = ref(0)
+const activeSection = ref<TeacherSection>("overview");
 
-const classFactor = computed(() => selectedClass.value === 'class1' ? 1.04 : selectedClass.value === 'class2' ? .94 : 1)
-const eligible = computed(() => selectedClass.value === 'all' ? 86 : 43)
-const completion = computed(() => Math.min(97, Math.round(88 * classFactor.value)))
-const accuracy = computed(() => Math.min(95, Math.round((selectedExperiment.value === 'surface' ? 76 : 71) * classFactor.value)))
-const conversations = computed(() => Math.round(184 * eligible.value / 86) + conversationDelta.value)
-const focusStudents = computed(() => selectedClass.value === 'all' ? 11 : selectedClass.value === 'class2' ? 7 : 4)
-const readiness = computed(() => Math.round(completion.value * .48 + accuracy.value * .42 + activeStudents.value / eligible.value * 10))
-const pulseMax = computed(() => Math.max(...pulse.value, 1))
-const clock = computed(() => now.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
+const navigation: Array<{ id: TeacherSection; label: string; icon: string }> = [
+  { id: "overview", label: "教学工作台", icon: "▦" },
+  { id: "classes", label: "班级学情", icon: "◫" },
+  { id: "experiments", label: "实验过程", icon: "⌁" },
+  { id: "alerts", label: "重点关注", icon: "!" },
+  { id: "integrations", label: "接入中心", icon: "⊞" },
+];
 
-const misconceptions = computed(() => selectedExperiment.value === 'surface' ? [
-  { name: '衍射角与条纹间距', questions: 31, wrong: 42, detail: '角度变化与条纹疏密关系混淆' },
-  { name: 'Kelvin 公式参数含义', questions: 24, wrong: 35, detail: '波长 λ、波数 k 的换算不熟练' },
-  { name: '有效数字与误差传递', questions: 18, wrong: 28, detail: '结果保留位数与不确定度不一致' },
-] : [
-  { name: '光栅方程适用条件', questions: 28, wrong: 39, detail: '主极大条件与单缝衍射混淆' },
-  { name: '级次与衍射角关系', questions: 23, wrong: 34, detail: '忽略可观察最高级次约束' },
-  { name: '测量不确定度合成', questions: 16, wrong: 26, detail: 'A、B 类不确定度混淆' },
-])
+const sourceDescription = computed(() => {
+  const profile = workspace.value?.dataProfile;
+  const coverage = profile
+    ? `${profile.studentCount} 名学习者、${profile.experimentRecordCount} 条实验记录、${profile.dialogueEventCount} 条学习对话`
+    : "教学数据正在汇聚";
+  return source.value === "live"
+    ? `数据已同步 · ${coverage} · 最近更新 ${workspace.value?.updatedAt || "—"}`
+    : `当前为示例教学工作区：已汇聚 ${coverage}，教师处理记录会独立持久化。`;
+});
+const selectedStudentCount = computed(() => {
+  if (scope.value?.classItem) return scope.value.classItem.students;
+  return (
+    workspace.value?.classes.reduce(
+      (total, item) => total + item.students,
+      0,
+    ) || 1
+  );
+});
+const activeStudentRate = computed(() =>
+  Math.round(
+    ((displayKpis.value.activeStudents ?? 0) / selectedStudentCount.value) *
+      100,
+  ),
+);
+const highPriorityCount = computed(
+  () =>
+    scope.value?.alerts.filter(
+      (item) => item.level === "high" && item.status !== "resolved",
+    ).length || 0,
+);
+const teachingHealth = computed(() =>
+  Math.round(
+    (displayKpis.value.completionRate ?? 0) * 0.45 +
+      (displayKpis.value.dataPassRate ?? 0) * 0.4 +
+      activeStudentRate.value * 0.15,
+  ),
+);
+const classAverages = computed(() => {
+  const classes = workspace.value?.classes ?? [];
+  const divisor = Math.max(classes.length, 1);
+  return {
+    completion: Math.round(
+      classes.reduce((total, item) => total + item.completionRate, 0) / divisor,
+    ),
+    dataPass: Math.round(
+      classes.reduce((total, item) => total + item.dataPassRate, 0) / divisor,
+    ),
+  };
+});
+const alertQueue = computed(() => {
+  const alerts = scope.value?.alerts ?? [];
+  return {
+    inProgress: alerts.filter((item) => item.status === "in_progress").length,
+    resolved: alerts.filter((item) => item.status === "resolved").length,
+  };
+});
+const completedStageCount = computed(
+  () =>
+    workspace.value?.stages.filter((stage) => stage.state === "complete")
+      .length ?? 0,
+);
+const activeStage = computed(() =>
+  workspace.value?.stages.find((stage) => stage.state === "active"),
+);
+const processProgress = computed(() =>
+  Math.round(
+    (completedStageCount.value /
+      Math.max(workspace.value?.stages.length ?? 1, 1)) *
+      100,
+  ),
+);
+const connectedIntegrationCount = computed(
+  () =>
+    workspace.value?.integrations.filter((item) => item.status === "connected")
+      .length ?? 0,
+);
 
-const questionPool = [
-  { text: '为什么衍射角变大以后，屏幕上的条纹反而更疏了？', tag: '概念理解', className: '物理 2402' },
-  { text: '波数 k 是直接用 2π/λ 吗？单位需要换成米吗？', tag: '公式应用', className: '物理 2401' },
-  { text: '拟合曲线很平滑，就能说明实验结果一定准确吗？', tag: '结果判读', className: '物理 2402' },
-  { text: '相对误差和不确定度在实验报告里应该分别怎么写？', tag: '误差分析', className: '物理 2401' },
-]
-const liveQuestions = computed(() => Array.from({ length: 3 }, (_, index) => questionPool[(questionCursor.value + index) % questionPool.length]))
-const eventPool = [
-  '物理 2402 新增 1 次概念提问，AI 已归入“衍射角关系”疑惑簇',
-  '物理 2401 提交预习测验，班级正确率更新为 76%',
-  '智慧星完成一次追问式辅导，学生随后修正了错误答案',
-  'AI 发现 2 条相似提问，已合并更新课堂讲解建议',
-]
-const latestEvent = computed(() => eventPool[eventCursor.value])
-
-function toggleLive() {
-  isLive.value = !isLive.value
+function goTo(section: TeacherSection) {
+  activeSection.value = section;
+  notice.value = "";
+}
+function selectAlert(alert: TeachingAlert) {
+  selectedAlertId.value = alert.id;
+  activeSection.value = "alerts";
+}
+function createIntervention() {
+  activeSection.value = "alerts";
+  void createDraft();
+}
+function statusLabel(status: TeachingAlert["status"]) {
+  return (
+    { new: "待处理", in_progress: "处理中", resolved: "已归档" } as const
+  )[status];
+}
+function integrationLabel(
+  status: TeacherWorkspace["integrations"][number]["status"],
+) {
+  if (source.value === "demo") {
+    return (
+      { connected: "演示映射", ready: "待接入", pending: "待配置" } as const
+    )[status];
+  }
+  return ({ connected: "运行中", ready: "可接入", pending: "待配置" } as const)[
+    status
+  ];
+}
+function typeLabel(type: TeachingAlert["type"]) {
+  return (
+    {
+      concept: "概念理解",
+      data: "数据质量",
+      progress: "学习进度",
+      device: "仪器采集",
+    } as const
+  )[type];
 }
 
-function updateLiveData() {
-  now.value = new Date()
-  const next = Math.max(24, Math.min(78, pulse.value.at(-1)! + Math.round(Math.random() * 13 - 6)))
-  pulse.value = [...pulse.value.slice(1), next]
-  const direction = Math.random() > .48 ? 1 : -1
-  activeStudents.value = Math.max(21, Math.min(eligible.value, activeStudents.value + direction))
-  aiRate.value = Math.max(4.5, Math.min(15, +(aiRate.value + Math.random() * 2 - .9).toFixed(1)))
-  conversationDelta.value += 1
-  questionCursor.value = (questionCursor.value + 1) % questionPool.length
-  eventCursor.value = (eventCursor.value + 1) % eventPool.length
-  updateVersion.value += 1
-}
-
-let timer: number | undefined
 onMounted(() => {
-  timer = window.setInterval(() => {
-    if (isLive.value) updateLiveData()
-  }, 2800)
-})
-onBeforeUnmount(() => window.clearInterval(timer))
+  void refresh();
+});
 </script>
 
 <template>
-  <div class="cockpit">
-    <header class="cockpit-header">
-      <div class="product-brand">
-        <div class="brand-symbol"><span>S</span><i></i></div>
-        <div><h1>AI 物理实验教学驾驶舱</h1><p>SIREN · 智慧星学情分析中心</p></div>
-      </div>
-
-      <div class="scope-controls">
-        <label><span>教学班</span><select v-model="selectedClass"><option value="all">全部班级</option><option value="class1">物理 2401</option><option value="class2">物理 2402</option></select></label>
-        <label class="experiment-select"><span>当前实验</span><select v-model="selectedExperiment"><option value="surface">液体表面张力系数测量</option><option value="diffraction">光栅衍射实验</option></select></label>
-      </div>
-
-      <div class="header-status">
-        <button class="live-switch" :class="{ paused: !isLive }" @click="toggleLive"><i></i>{{ isLive ? '实时分析中' : '已暂停' }}</button>
-        <div class="clock"><strong>{{ clock }}</strong><span>模拟实时数据</span></div>
-        <div class="teacher-avatar">王</div>
-      </div>
-    </header>
-
-    <main class="cockpit-main">
-      <section class="live-event-bar" :class="{ paused: !isLive }">
-        <strong><i></i>实时教学事件</strong>
-        <transition name="ticker" mode="out-in"><p :key="eventCursor">{{ latestEvent }}</p></transition>
-        <span>{{ clock }} · AI 诊断已同步</span>
-      </section>
-
-      <section class="kpi-strip" aria-label="核心教学指标">
-        <article><span class="kpi-icon blue">◉</span><div><p>课堂准备度</p><strong :key="readiness" class="changing-value">{{ readiness }}<small>/100</small></strong></div><em class="up">较上周 +5</em></article>
-        <article><span class="kpi-icon green">✓</span><div><p>预习完成率</p><strong>{{ completion }}<small>%</small></strong></div><em>{{ eligible }} 人应完成</em></article>
-        <article><span class="kpi-icon violet">◇</span><div><p>测验正确率</p><strong>{{ accuracy }}<small>%</small></strong></div><em class="warn">低于目标 {{ Math.max(0, 80 - accuracy) }}%</em></article>
-        <article><span class="kpi-icon orange">✦</span><div><p>AI 有效对话</p><strong :key="conversations" class="changing-value">{{ conversations }}<small>条</small></strong></div><em class="live-rate">● {{ aiRate.toFixed(1) }} 次/分钟</em></article>
-        <article class="attention-kpi"><span class="kpi-icon red">!</span><div><p>需教师关注</p><strong>{{ focusStudents }}<small>人</small></strong></div><em>已形成干预建议</em></article>
-      </section>
-
-      <section class="cockpit-grid">
-        <article class="cockpit-panel fusion-panel">
-          <header class="panel-header"><div><span class="section-code">AI 综合研判</span><h2>测验 + 对话融合诊断</h2></div><span class="confidence">可信度 92%</span></header>
-
-          <div class="ai-conclusion">
-            <span class="ai-badge">AI</span>
-            <div><p>本节课最需要解决的问题</p><h3>学生会计算，但没有真正理解<br><em>“衍射角—条纹间距—波数”</em>之间的物理联系</h3></div>
+  <div class="teacher-workspace">
+    <section v-if="loading" class="workspace-state" aria-live="polite">
+      <i></i><strong>正在整理教学数据…</strong>
+      <p>正在加载班级、实验记录与教师干预状态。</p>
+    </section>
+    <section v-else-if="error" class="workspace-state unavailable" role="alert">
+      <span>!</span><strong>教学数据暂不可用</strong>
+      <p>{{ error }}</p>
+      <form
+        v-if="accessRequired"
+        class="teacher-access-form"
+        @submit.prevent="submitAccessCode"
+      >
+        <label for="teacher-access-code">教师访问码</label>
+        <input
+          id="teacher-access-code"
+          v-model="accessCode"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+        <button class="button primary" type="submit">进入教师工作区</button>
+      </form>
+      <button v-else class="button primary" type="button" @click="refresh">
+        重新连接
+      </button>
+    </section>
+    <template v-else-if="workspace && scope">
+      <aside class="workspace-sidebar" aria-label="教师端主导航">
+        <div class="product-lockup">
+          <div class="product-mark"><span>∿</span><i></i></div>
+          <div><strong>SIREN Labs</strong><span>AI 实验教学工作台</span></div>
+        </div>
+        <div class="workspace-context">
+          <span>当前工作区</span><strong>{{ workspace.organization }}</strong
+          ><small>物理 / 光电实验教学</small>
+        </div>
+        <nav class="workspace-nav">
+          <button
+            v-for="item in navigation"
+            :key="item.id"
+            :class="{ active: activeSection === item.id }"
+            type="button"
+            @click="goTo(item.id)"
+          >
+            <i>{{ item.icon }}</i
+            ><span>{{ item.label }}</span
+            ><em v-if="item.id === 'alerts' && actionableAlerts.length">{{
+              actionableAlerts.length
+            }}</em>
+          </button>
+        </nav>
+        <div class="sidebar-pilot-card">
+          <span class="pilot-icon">✦</span><strong>虚实一体试点</strong>
+          <p>把仿真、仪器和学习过程数据汇成一条可诊断的教学链路。</p>
+          <button type="button" @click="goTo('integrations')">
+            查看接入能力 →
+          </button>
+        </div>
+        <div class="sidebar-profile">
+          <div class="avatar">{{ workspace.teacherName.slice(0, 1) }}</div>
+          <div>
+            <strong>{{ workspace.teacherName }}</strong
+            ><span>课程负责人</span>
           </div>
+          <button type="button" aria-label="更多教师设置">···</button>
+        </div>
+      </aside>
 
-          <div class="evidence-row">
-            <div><span>测验行为证据</span><strong>{{ eligible * 5 }}</strong><small>次答题记录</small></div>
-            <i>+</i>
-            <div><span>对话语义证据</span><strong :key="conversations" class="changing-value">{{ conversations }}</strong><small>条有效问答</small></div>
-            <i>→</i>
-            <div class="result-evidence"><span>AI 归纳结果</span><strong>3</strong><small>个核心疑惑</small></div>
+      <main class="workspace-main">
+        <header class="workspace-header">
+          <div class="header-title">
+            <p>{{ workspace.courseName }} <i>/</i> {{ scope.classLabel }}</p>
+            <h1>
+              {{ navigation.find((item) => item.id === activeSection)?.label }}
+            </h1>
           </div>
-
-          <div class="ranking-title"><h3>高频疑惑与测验错误交叉验证</h3><span>提问次数 / 相关题错误率</span></div>
-          <div class="misconception-ranking">
-            <div v-for="(item, index) in misconceptions" :key="item.name" class="rank-row">
-              <b>{{ index + 1 }}</b>
-              <div class="rank-copy"><strong>{{ item.name }}</strong><span>{{ item.detail }}</span><div class="rank-bar"><i :style="{ width: `${item.wrong * 2}%` }"></i></div></div>
-              <div class="rank-values"><strong>{{ item.questions }}<small> 次提问</small></strong><span>{{ item.wrong }}% 错误率</span></div>
-            </div>
+          <div class="header-actions">
+            <label class="class-filter"
+              ><span>教学班</span
+              ><select v-model="selectedClassId" aria-label="筛选教学班">
+                <option
+                  v-for="option in classOptions"
+                  :key="option.id"
+                  :value="option.id"
+                >
+                  {{ option.name }}
+                </option>
+              </select></label
+            ><button
+              class="button secondary"
+              type="button"
+              @click="goTo('integrations')"
+            >
+              接入数据</button
+            ><button
+              class="button primary"
+              type="button"
+              :disabled="creatingDraft"
+              @click="createIntervention"
+            >
+              {{ creatingDraft ? "正在创建…" : "+ 创建干预草稿" }}
+            </button>
           </div>
+        </header>
+        <section class="source-banner" :class="{ live: source === 'live' }">
+          <span class="source-dot"></span
+          ><strong>{{
+            source === "live" ? "真实教学数据" : "演示数据工作区"
+          }}</strong>
+          <p>{{ sourceDescription }}</p>
+          <small v-if="transport === 'fixture'"
+            >离线模式：处理操作不会写入服务端。</small
+          ><button
+            v-if="source === 'demo'"
+            type="button"
+            @click="goTo('integrations')"
+          >
+            了解接入方案 →
+          </button>
+        </section>
 
-          <div class="pulse-block">
-            <div class="pulse-heading"><div><h3>实时学习脉冲</h3><span>近 35 分钟有效学习事件</span></div><strong :key="activeStudents" class="changing-value"><i></i>{{ activeStudents }} 人在线</strong></div>
-            <div class="pulse-chart"><span class="scan-line"></span><i v-for="(value, index) in pulse" :key="index === pulse.length - 1 ? `live-${updateVersion}` : `bar-${index}`" :class="{ latest: index === pulse.length - 1 }" :style="{ height: `${Math.max(15, value / pulseMax * 100)}%` }"></i></div>
-            <div class="pulse-axis"><span>-35 分钟</span><span>-20 分钟</span><span>-10 分钟</span><span>现在</span></div>
-          </div>
-        </article>
+        <div class="workspace-content">
+          <section
+            v-if="activeSection === 'overview'"
+            class="page-content overview-page"
+          >
+            <section class="welcome-row overview-hero">
+              <div class="hero-copy">
+                <span class="hero-kicker"><i></i> 今日教学指挥台</span>
+                <h2>
+                  把注意力放在 <em>{{ actionableAlerts.length }}</em> 个关键节点
+                </h2>
+                <p>聚合测验、采集与对话线索；先看趋势，再决定是否介入。</p>
+                <div class="hero-signals" aria-label="教学工作重点">
+                  <span
+                    ><b>{{ highPriorityCount }}</b> 高优先级</span
+                  >
+                  <span
+                    ><b>{{ displayKpis.dataPassRate }}%</b> 数据可用</span
+                  >
+                  <span
+                    ><b>{{ workspace.experimentName }}</b> 当前实验</span
+                  >
+                </div>
+              </div>
+              <div class="hero-visual" aria-label="教学健康度">
+                <div
+                  class="health-ring"
+                  :style="`--health-score: ${teachingHealth}%`"
+                >
+                  <div>
+                    <strong>{{ teachingHealth }}</strong
+                    ><span>/100</span><small>教学健康度</small>
+                  </div>
+                </div>
+                <div class="health-summary">
+                  <strong>{{
+                    teachingHealth >= 90
+                      ? "教学节奏总体稳定"
+                      : "需要关注数据质量"
+                  }}</strong>
+                  <span
+                    >完成率 {{ displayKpis.completionRate }}% · 数据合格
+                    {{ displayKpis.dataPassRate }}%</span
+                  >
+                </div>
+              </div>
+            </section>
+            <section class="metric-grid" aria-label="班级教学指标">
+              <article class="metric-card blue">
+                <div class="metric-card-top">
+                  <span class="metric-symbol">◉</span
+                  ><span class="metric-trend">{{ activeStudentRate }}%</span>
+                </div>
+                <div>
+                  <p>活跃学生</p>
+                  <strong
+                    >{{ displayKpis.activeStudents }}<small> 人</small></strong
+                  ><em>当前筛选：{{ scope.classLabel }}</em
+                  ><span class="metric-progress"
+                    ><i :style="{ width: `${activeStudentRate}%` }"></i
+                  ></span>
+                </div>
+              </article>
+              <article class="metric-card green">
+                <div class="metric-card-top">
+                  <span class="metric-symbol">✓</span
+                  ><span class="metric-trend">已完成</span>
+                </div>
+                <div>
+                  <p>实验完成率</p>
+                  <strong
+                    >{{ displayKpis.completionRate }}<small>%</small></strong
+                  ><em>当前班级已完成实验任务</em
+                  ><span class="metric-progress"
+                    ><i :style="{ width: `${displayKpis.completionRate}%` }"></i
+                  ></span>
+                </div>
+              </article>
+              <article class="metric-card orange">
+                <div class="metric-card-top">
+                  <span class="metric-symbol">⌁</span
+                  ><span class="metric-trend">双重校验</span>
+                </div>
+                <div>
+                  <p>数据合格率</p>
+                  <strong>{{ displayKpis.dataPassRate }}<small>%</small></strong
+                  ><em>基于图像与计算双重校验</em
+                  ><span class="metric-progress"
+                    ><i :style="{ width: `${displayKpis.dataPassRate}%` }"></i
+                  ></span>
+                </div>
+              </article>
+              <article class="metric-card violet">
+                <div class="metric-card-top">
+                  <span class="metric-symbol">!</span
+                  ><span class="metric-trend attention">需响应</span>
+                </div>
+                <div>
+                  <p>待教师关注</p>
+                  <strong
+                    >{{ displayKpis.attentionCount }}<small> 项</small></strong
+                  ><em
+                    ><b>{{ highPriorityCount }} 项高优先级</b></em
+                  ><span class="attention-dots" aria-hidden="true"
+                    ><i
+                      v-for="index in 5"
+                      :key="index"
+                      :class="{ active: index <= displayKpis.attentionCount }"
+                    ></i
+                  ></span>
+                </div>
+              </article>
+            </section>
+            <section class="overview-grid">
+              <article class="panel priority-panel">
+                <header class="panel-heading">
+                  <div>
+                    <span class="workspace-eyebrow">优先处理</span>
+                    <h3>本节课教学关注项</h3>
+                  </div>
+                  <button type="button" @click="goTo('alerts')">
+                    查看全部 →
+                  </button>
+                </header>
+                <div class="priority-list">
+                  <button
+                    v-for="alert in actionableAlerts.slice(0, 3)"
+                    :key="alert.id"
+                    class="priority-item"
+                    type="button"
+                    @click="selectAlert(alert)"
+                  >
+                    <span class="priority-icon" :class="alert.type">{{
+                      alert.type === "concept"
+                        ? "⌘"
+                        : alert.type === "data"
+                          ? "⌁"
+                          : alert.type === "device"
+                            ? "◉"
+                            : "↗"
+                    }}</span
+                    ><span class="priority-copy"
+                      ><strong>{{ alert.title }}</strong
+                      ><small
+                        >{{ alert.student }} · {{ alert.className }}</small
+                      ></span
+                    ><em :class="alert.level">{{
+                      alert.level === "high" ? "高优先级" : "建议跟进"
+                    }}</em
+                    ><i>›</i>
+                  </button>
+                </div>
+                <footer>每项判断都附带来源证据，教师确认后再发起干预。</footer>
+              </article>
+              <article class="panel diagnosis-panel">
+                <header class="panel-heading">
+                  <div>
+                    <span class="workspace-eyebrow">AI 教学诊断</span>
+                    <h3>为什么需要介入？</h3>
+                  </div>
+                  <span class="evidence-count">{{
+                    scope.diagnosis.confidenceLabel
+                  }}</span>
+                </header>
+                <h4>{{ scope.diagnosis.title }}</h4>
+                <p class="diagnosis-summary">{{ scope.diagnosis.summary }}</p>
+                <div class="evidence-list">
+                  <div
+                    v-for="evidence in scope.diagnosis.evidence"
+                    :key="evidence.source"
+                    class="evidence-item"
+                  >
+                    <span>{{ evidence.source }}</span
+                    ><strong>{{ evidence.label }}</strong
+                    ><small>{{ evidence.detail }}</small>
+                  </div>
+                </div>
+                <div class="recommendation">
+                  <span>建议行动</span>
+                  <p>{{ scope.diagnosis.recommendation }}</p>
+                </div>
+              </article>
+              <article class="panel class-panel">
+                <header class="panel-heading">
+                  <div>
+                    <span class="workspace-eyebrow">班级概览</span>
+                    <h3>从总体看到班级差异</h3>
+                  </div>
+                  <button type="button" @click="goTo('classes')">
+                    进入学情 →
+                  </button>
+                </header>
+                <div class="class-list">
+                  <button
+                    v-for="item in workspace.classes"
+                    :key="item.id"
+                    type="button"
+                    @click="
+                      selectedClassId = item.id;
+                      goTo('classes');
+                    "
+                  >
+                    <span class="class-avatar">{{ item.name.slice(-2) }}</span
+                    ><span class="class-copy"
+                      ><strong>{{ item.name }}</strong
+                      ><small
+                        >{{ item.students }} 人 · {{ item.nextSession }}</small
+                      ></span
+                    ><span class="class-stat"
+                      ><strong>{{ item.completionRate }}%</strong
+                      ><small>完成率</small
+                      ><span class="class-meter"
+                        ><i
+                          :style="{ width: `${item.dataPassRate}%` }"
+                        ></i></span></span
+                    ><i :class="item.trend">{{
+                      item.trend === "up" ? "↗" : "→"
+                    }}</i>
+                  </button>
+                </div>
+              </article>
+              <article class="panel activity-panel">
+                <header class="panel-heading">
+                  <div>
+                    <span class="workspace-eyebrow">实验脉冲</span>
+                    <h3>今日学习过程</h3>
+                  </div>
+                  <span class="updated"
+                    >更新于 {{ workspace.updatedAt.slice(-5) }}</span
+                  >
+                </header>
+                <div class="activity-chart">
+                  <div
+                    v-for="item in scope.activity"
+                    :key="item.time"
+                    class="activity-column"
+                  >
+                    <span>{{ item.value }}</span
+                    ><i
+                      :style="{
+                        height: `${(item.value / peakActivity) * 100}%`,
+                      }"
+                    ></i
+                    ><small>{{ item.time }}</small
+                    ><em>{{ item.label }}</em>
+                  </div>
+                </div>
+                <div class="activity-legend">
+                  <span><i></i>有效学习事件</span
+                  ><small
+                    >峰值：{{
+                      scope.activity.find((item) => item.value === peakActivity)
+                        ?.label
+                    }}</small
+                  >
+                </div>
+              </article>
+            </section>
+          </section>
 
-        <article class="cockpit-panel matrix-panel">
-          <header class="panel-header"><div><span class="section-code">班级知识画像</span><h2>核心概念掌握矩阵</h2></div><span class="matrix-note">班级 × 核心概念</span></header>
-          <div class="readiness-summary">
-            <div class="readiness-ring" :style="{ '--progress': `${readiness * 3.6}deg` }"><div><strong>{{ readiness }}</strong><span>课堂准备度</span></div></div>
-            <div><strong>{{ readiness >= 80 ? '具备开课条件' : '建议先行干预' }}</strong><p>建议用 5 分钟概念辨析后进入实验操作。</p></div>
-          </div>
-          <div class="matrix">
-            <div class="matrix-head"></div><div class="matrix-head">角度关系</div><div class="matrix-head">Kelvin</div><div class="matrix-head">误差</div><div class="matrix-head">拟合</div>
-            <div class="matrix-label">2401<small>43人</small></div><div class="cell c2">68%</div><div class="cell c3">76%</div><div class="cell c3">79%</div><div class="cell c4">86%</div>
-            <div class="matrix-label">2402<small>43人</small></div><div class="cell c1">57%<small>重点</small></div><div class="cell c2">69%</div><div class="cell c3">74%</div><div class="cell c4">81%</div>
-          </div>
-          <footer><span>低掌握</span><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><span>高掌握</span></footer>
-        </article>
+          <section
+            v-else-if="activeSection === 'classes'"
+            class="page-content classes-page"
+          >
+            <section class="workspace-page-intro class-page-intro">
+              <div class="page-intro-copy">
+                <span class="workspace-eyebrow">班级学情</span>
+                <h2>把班级差异转成下一步教学动作</h2>
+                <p>
+                  用完成度、数据质量与待处理事项一起判断班级状态；点击任一班级即可进入对应关注项。
+                </p>
+              </div>
+              <div class="class-comparison-visual" aria-label="班级完成率比较">
+                <div class="comparison-score">
+                  <strong>{{ classAverages.completion }}%</strong
+                  ><span>平均完成率</span>
+                </div>
+                <div class="comparison-list">
+                  <div v-for="item in workspace.classes" :key="item.id">
+                    <span>{{ item.name }}</span
+                    ><i><b :style="{ width: `${item.completionRate}%` }"></b></i
+                    ><strong>{{ item.completionRate }}%</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <article class="panel data-table-panel">
+              <div class="table-header">
+                <span>教学班</span><span>实验完成</span><span>数据合格</span
+                ><span>平均误差</span><span>需关注</span><span></span>
+              </div>
+              <button
+                v-for="item in workspace.classes"
+                :key="item.id"
+                type="button"
+                class="table-row"
+                :class="{ selected: selectedClassId === item.id }"
+                @click="
+                  selectedClassId = item.id;
+                  goTo('alerts');
+                "
+              >
+                <span
+                  ><strong>{{ item.name }}</strong
+                  ><small
+                    >{{ item.students }} 人 · {{ item.nextSession }}</small
+                  ></span
+                ><span
+                  ><strong>{{ item.completionRate }}%</strong
+                  ><i
+                    ><b
+                      :style="{ width: `${item.completionRate}%` }"
+                    ></b></i></span
+                ><span
+                  ><strong>{{ item.dataPassRate }}%</strong
+                  ><i class="green"
+                    ><b
+                      :style="{ width: `${item.dataPassRate}%` }"
+                    ></b></i></span
+                ><span
+                  ><strong>{{ item.averageError }}%</strong
+                  ><small>相对误差</small></span
+                ><span class="attention-number"
+                  >{{ item.attentionCount }} <small>项</small></span
+                ><span>查看关注项 ›</span>
+              </button>
+            </article>
+            <article class="panel class-insight">
+              <div>
+                <span class="workspace-eyebrow">教学建议</span>
+                <h3>不要只盯着完成率</h3>
+                <p>
+                  对完成率较高但数据质量偏低的班级，优先检查“采集条件—观测量—模型输入”的连续性；这比补一套习题更可能提升实验质量。
+                </p>
+              </div>
+              <div class="insight-pill">
+                <span>本次筛选</span><strong>{{ scope.classLabel }}</strong
+                ><small>{{ actionableAlerts.length }} 项可行动线索</small>
+              </div>
+            </article>
+          </section>
 
-        <article class="cockpit-panel voice-panel">
-          <header class="panel-header"><div><span class="section-code">实时语义聚合</span><h2>学生此刻在问</h2></div><span class="streaming"><i></i>持续更新</span></header>
-          <transition-group name="question" tag="div" class="question-list">
-            <div v-for="(question, index) in liveQuestions" :key="question.text" class="question-item">
-              <span>{{ index + 1 }}</span><div><p>“{{ question.text }}”</p><small>{{ question.className }} · {{ question.tag }}</small></div>
-            </div>
-          </transition-group>
-        </article>
+          <section
+            v-else-if="activeSection === 'experiments'"
+            class="page-content experiments-page"
+          >
+            <section class="workspace-page-intro process-page-intro">
+              <div class="page-intro-copy">
+                <span class="workspace-eyebrow">虚实一体实验过程</span>
+                <h2>让一次实验留下可分析、可复盘的数据足迹</h2>
+                <p>
+                  课前推演、课中采集、课后诊断与教师反馈共用同一条记录链路。
+                </p>
+              </div>
+              <div class="process-scorecard" aria-label="实验流程进度">
+                <span>当前环节</span
+                ><strong>{{ activeStage?.name ?? "流程已就绪" }}</strong>
+                <i><b :style="{ width: `${processProgress}%` }"></b></i>
+                <small
+                  >{{ completedStageCount }} /
+                  {{ workspace.stages.length }} 环节已完成</small
+                >
+              </div>
+            </section>
+            <article class="panel process-panel">
+              <div
+                v-for="(stage, index) in workspace.stages"
+                :key="stage.name"
+                class="process-stage"
+                :class="stage.state"
+              >
+                <span class="stage-number">0{{ index + 1 }}</span
+                ><i v-if="index < workspace.stages.length - 1"></i>
+                <div>
+                  <strong>{{ stage.name }}</strong
+                  ><small>{{ stage.description }}</small
+                  ><em>{{ stage.metric }}</em>
+                </div>
+              </div>
+            </article>
+            <section class="process-benefits">
+              <article>
+                <span>01</span>
+                <h3>先在仿真中暴露理解问题</h3>
+                <p>
+                  把参数推演、概念测验的过程记录带到真实实验前，教师知道该讲什么。
+                </p>
+              </article>
+              <article>
+                <span>02</span>
+                <h3>实物数据不止保存结果</h3>
+                <p>
+                  保留图像、设备条件、关键观测量与计算过程，支持数据质量追溯。
+                </p>
+              </article>
+              <article>
+                <span>03</span>
+                <h3>AI 将过程转成干预线索</h3>
+                <p>
+                  不是替教师下结论，而是聚合证据、标记风险、提供可执行的追问与任务。
+                </p>
+              </article>
+            </section>
+          </section>
 
-        <article class="cockpit-panel action-panel">
-          <header class="panel-header inverse"><div><span class="section-code">AI 教学智能体</span><h2>课堂行动方案</h2></div><span class="generated">随学情更新</span></header>
+          <section
+            v-else-if="activeSection === 'alerts'"
+            class="page-content alerts-page"
+          >
+            <section class="workspace-page-intro alerts-page-intro">
+              <div>
+                <span class="workspace-eyebrow">重点学生与实验预警</span>
+                <h2>每一个提醒，都必须能说明原因</h2>
+                <p>
+                  先看高优先级，再结合证据决定是否介入；系统不会替教师作出最终判断。
+                </p>
+              </div>
+              <div class="alert-queue" aria-label="预警处理概览">
+                <span
+                  ><b>{{ highPriorityCount }}</b> 高优先级</span
+                >
+                <span
+                  ><b>{{ alertQueue.inProgress }}</b> 处理中</span
+                >
+                <span
+                  ><b>{{ alertQueue.resolved }}</b> 已归档</span
+                >
+              </div>
+            </section>
+            <section v-if="scope.alerts.length" class="alert-layout">
+              <article class="panel alert-list-panel">
+                <button
+                  v-for="alert in scope.alerts"
+                  :key="alert.id"
+                  type="button"
+                  class="alert-list-item"
+                  :class="{
+                    active: activeAlert?.id === alert.id,
+                    resolved: alert.status === 'resolved',
+                  }"
+                  @click="selectedAlertId = alert.id"
+                >
+                  <span class="alert-level" :class="alert.level"></span>
+                  <div>
+                    <strong>{{ alert.title }}</strong
+                    ><small
+                      >{{ alert.student }} · {{ alert.className }} ·
+                      {{ typeLabel(alert.type) }}</small
+                    >
+                  </div>
+                  <em>{{ statusLabel(alert.status) }}</em>
+                </button>
+              </article>
+              <article v-if="activeAlert" class="panel alert-detail-panel">
+                <header>
+                  <span class="detail-tag" :class="activeAlert.level">{{
+                    activeAlert.level === "high"
+                      ? "高优先级"
+                      : activeAlert.level === "medium"
+                        ? "建议本节课处理"
+                        : "可自动跟进"
+                  }}</span
+                  ><span>{{ typeLabel(activeAlert.type) }}</span>
+                </header>
+                <h3>{{ activeAlert.title }}</h3>
+                <p class="detail-description">{{ activeAlert.detail }}</p>
+                <section class="detail-block">
+                  <span>系统依据</span
+                  ><strong>{{ activeAlert.evidence }}</strong
+                  ><small>系统仅提供证据归纳；请结合课堂实际作出判断。</small>
+                </section>
+                <section class="detail-block recommendation-block">
+                  <span>建议教师行动</span
+                  ><strong>{{ activeAlert.recommendation }}</strong>
+                </section>
+                <div class="detail-actions">
+                  <button
+                    class="button secondary"
+                    type="button"
+                    :disabled="
+                      activeAlert.status === 'resolved' ||
+                      savingAlertId === activeAlert.id
+                    "
+                    @click="saveAlert('in_progress')"
+                  >
+                    {{
+                      savingAlertId === activeAlert.id
+                        ? "正在保存…"
+                        : "加入干预清单"
+                    }}</button
+                  ><button
+                    class="button primary"
+                    type="button"
+                    :disabled="
+                      activeAlert.status === 'resolved' ||
+                      savingAlertId === activeAlert.id
+                    "
+                    @click="saveAlert('resolved')"
+                  >
+                    确认已处理
+                  </button>
+                </div>
+                <p v-if="notice" class="action-notice" aria-live="polite">
+                  {{ notice }}
+                </p>
+              </article>
+            </section>
+            <section v-else class="empty-panel">
+              <span>✓</span><strong>当前筛选范围没有待跟进事项</strong>
+              <p>系统会在出现新的实验质量、概念理解或进度风险时提示教师。</p>
+            </section>
+          </section>
 
-          <div class="action-focus"><span>本节课教学目标</span><h3>让学生从“会套公式”<br>走向“能解释物理图像”</h3><p>依据测验错误与智慧星对话的联合分析自动生成。</p></div>
-
-          <ol class="action-steps">
-            <li><span>01<small>5 min</small></span><div><strong>动态光路概念辨析</strong><p>对比衍射角变化前后的条纹位置，让学生先预测再观察。</p><em>覆盖 31 次重复疑惑</em></div></li>
-            <li><span>02<small>3 min</small></span><div><strong>公式中的物理量连线</strong><p>将 λ、k、θ 与实验装置上的可测量量逐一对应。</p><em>关联错题 Q2、Q4</em></div></li>
-            <li><span>03<small>8 min</small></span><div><strong>分层实验追问</strong><p>对 {{ focusStudents }} 名重点学生使用解释型追问，不直接给出答案。</p><em>AI 已生成追问脚本</em></div></li>
-          </ol>
-
-          <div class="teacher-prompt"><span>建议教师追问</span><p>“如果只改变激光波长，你预测条纹间距如何变化？为什么？”</p></div>
-          <button class="generate-button">✦ 生成课堂讲解卡</button>
-          <footer>AI 提供证据与建议，最终教学判断由教师完成</footer>
-        </article>
-      </section>
-    </main>
+          <section v-else class="page-content integrations-page">
+            <section class="workspace-page-intro integrations-page-intro">
+              <div class="page-intro-copy">
+                <span class="workspace-eyebrow">产品接入与试点能力</span>
+                <h2>不替换已有平台，连接已有教学数据</h2>
+                <p>
+                  将实验室管理、虚拟仿真与仪器采集沉淀的数据汇入 AI
+                  诊断层，减少学校重复建设。
+                </p>
+              </div>
+              <div class="integration-map" aria-label="已接入能力概览">
+                <span
+                  v-for="item in workspace.integrations"
+                  :key="item.id"
+                  :class="item.status"
+                  :title="item.title"
+                  >{{ item.icon }}</span
+                >
+                <strong>AI<small>诊断层</small></strong>
+                <em>{{ connectedIntegrationCount }} 项已映射</em>
+              </div>
+            </section>
+            <section class="data-profile-grid" aria-label="当前数据覆盖范围">
+              <article>
+                <span>学习者</span
+                ><strong>{{ workspace.dataProfile.studentCount }}</strong
+                ><small>已纳入教学切片</small>
+              </article>
+              <article>
+                <span>实验记录</span
+                ><strong>{{
+                  workspace.dataProfile.experimentRecordCount
+                }}</strong
+                ><small>含图像质量与误差字段</small>
+              </article>
+              <article>
+                <span>测验提交</span
+                ><strong>{{ workspace.dataProfile.quizAttemptCount }}</strong
+                ><small>含概念与单位题结果</small>
+              </article>
+              <article>
+                <span>学习对话</span
+                ><strong>{{ workspace.dataProfile.dialogueEventCount }}</strong
+                ><small>用于高频困惑聚类</small>
+              </article>
+            </section>
+            <section class="integration-grid">
+              <article
+                v-for="item in workspace.integrations"
+                :key="item.id"
+                class="panel integration-card"
+              >
+                <header>
+                  <span class="integration-icon">{{ item.icon }}</span
+                  ><span class="integration-status" :class="item.status">{{
+                    integrationLabel(item.status)
+                  }}</span>
+                </header>
+                <span class="integration-category">{{ item.category }}</span>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.description }}</p>
+                <footer>
+                  <span>可交换数据</span><strong>{{ item.capability }}</strong>
+                </footer>
+              </article>
+            </section>
+            <article class="pilot-architecture">
+              <div>
+                <span class="workspace-eyebrow">建议试点路径</span>
+                <h3>一项真实实验 · 一个教学班 · 一条完整数据链</h3>
+                <p>
+                  先验证数据接入、教学诊断和教师干预是否产生真实价值，再扩展至多仪器、多实验和校级平台。
+                </p>
+              </div>
+              <ol>
+                <li><span>1</span>同步班级与实验任务</li>
+                <li><span>2</span>接入图像 / 仪器 / 仿真数据</li>
+                <li><span>3</span>验证 AI 诊断与教师干预效果</li>
+              </ol>
+            </article>
+          </section>
+        </div>
+      </main>
+    </template>
   </div>
 </template>
 
-<style scoped>
-:global(*){box-sizing:border-box}:global(html),:global(body),:global(#app){width:100%;height:100%;margin:0;overflow:hidden}:global(body){font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;background:#07101f;color:#e8eefc}.cockpit{width:100vw;height:100vh;overflow:hidden;background:radial-gradient(circle at 50% -20%,#17305d 0,#0a1529 42%,#07101f 100%);display:flex;flex-direction:column}.cockpit-header{height:76px;flex:none;padding:0 28px;display:grid;grid-template-columns:minmax(300px,1fr) auto minmax(300px,1fr);align-items:center;border-bottom:1px solid #ffffff12;background:#081326dc;backdrop-filter:blur(16px)}.product-brand{display:flex;align-items:center;gap:13px}.brand-symbol{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#4f87ff,#2553d5);font-size:20px;font-weight:800;position:relative;box-shadow:0 0 25px #3972ff44}.brand-symbol i{position:absolute;width:7px;height:7px;background:#4ce6b3;border:2px solid #17346c;border-radius:50%;right:-1px;top:-1px}.product-brand h1{font-size:21px;margin:0;letter-spacing:.3px}.product-brand p{font-size:11px;color:#7890b8;margin:4px 0 0}.scope-controls{display:flex;gap:10px}.scope-controls label{height:46px;min-width:130px;border:1px solid #ffffff14;background:#ffffff08;border-radius:10px;padding:6px 10px}.scope-controls label.experiment-select{min-width:230px}.scope-controls label>span{display:block;color:#6f86ad;font-size:9px}.scope-controls select{width:100%;border:0;background:transparent;color:#e5ecfa;font-size:12px;font-weight:600;outline:0;margin-top:3px}.scope-controls option{color:#172033}.header-status{display:flex;justify-content:flex-end;align-items:center;gap:14px}.live-switch{height:32px;border:1px solid #2b7e68;background:#0f392f;color:#62e1b7;border-radius:18px;padding:0 12px;font-size:11px}.live-switch i,.streaming i,.pulse-heading strong i{display:inline-block;width:6px;height:6px;background:#4ce6b3;border-radius:50%;margin-right:6px;animation:signal 1.5s infinite}.live-switch.paused{border-color:#526079;background:#202b3d;color:#9ba8bc}.live-switch.paused i{background:#8d98aa;animation:none}.clock{text-align:right}.clock strong,.clock span{display:block}.clock strong{font:600 14px ui-monospace,Consolas,monospace;letter-spacing:.5px}.clock span{color:#667a9d;font-size:9px;margin-top:2px}.teacher-avatar{width:34px;height:34px;border-radius:10px;background:#263a62;color:#8cb0ff;display:grid;place-items:center;font-weight:700}.cockpit-main{height:calc(100vh - 76px);padding:16px 20px 18px;display:flex;flex-direction:column;gap:13px;min-height:0}.kpi-strip{height:88px;flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:11px}.kpi-strip article{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:11px;padding:12px 15px;border:1px solid #ffffff12;background:linear-gradient(135deg,#14223bda,#0e1b31da);border-radius:12px;box-shadow:inset 0 1px #ffffff08}.kpi-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:17px}.kpi-icon.blue{color:#71a0ff;background:#2f68e326}.kpi-icon.green{color:#5edfb3;background:#2aae8124}.kpi-icon.violet{color:#b291ff;background:#8057dd24}.kpi-icon.orange{color:#ffc072;background:#e98a2d22}.kpi-icon.red{color:#ff857d;background:#e6595026}.kpi-strip p{color:#8fa0bd;font-size:11px;margin:0 0 2px}.kpi-strip strong{font-size:26px;line-height:1}.kpi-strip strong small{font-size:11px;color:#7285a5;margin-left:2px}.kpi-strip em{font-style:normal;color:#7e90ad;font-size:9px;text-align:right}.kpi-strip em.up{color:#55d7ad}.kpi-strip em.warn{color:#ffb65f}.kpi-strip em.live-rate{color:#ffc16f}.kpi-strip .attention-kpi{border-color:#d65a553f;background:linear-gradient(135deg,#2c1b29,#111a2c)}.cockpit-grid{flex:1;min-height:0;display:grid;grid-template-columns:1.25fr .92fr .9fr;grid-template-rows:1.08fr .82fr;grid-template-areas:"fusion matrix action" "fusion voice action";gap:13px}.cockpit-panel{min-width:0;min-height:0;overflow:hidden;border:1px solid #ffffff12;background:linear-gradient(145deg,#111e35eb,#0b172beb);border-radius:14px;padding:17px 19px;box-shadow:inset 0 1px #ffffff08,0 12px 30px #00000018}.fusion-panel{grid-area:fusion;display:flex;flex-direction:column}.matrix-panel{grid-area:matrix}.voice-panel{grid-area:voice}.action-panel{grid-area:action;background:linear-gradient(155deg,#152d5b,#151d3d 58%,#221b42);border-color:#557cce55}.panel-header{display:flex;justify-content:space-between;align-items:flex-start;flex:none}.section-code{font-size:9px;color:#4f89ff;letter-spacing:1.2px;font-weight:700}.panel-header h2{font-size:17px;margin:3px 0 0}.confidence,.matrix-note,.generated{font-size:9px;border:1px solid #ffffff13;background:#ffffff08;border-radius:10px;color:#8ea2c3;padding:4px 8px}.confidence{color:#68dcb7;border-color:#39a68144}.ai-conclusion{display:flex;gap:13px;margin-top:13px;padding:13px 15px;border:1px solid #4374dd42;background:linear-gradient(90deg,#1c376b6e,#13284d45);border-radius:11px}.ai-badge{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:10px;color:white;font-weight:800;background:linear-gradient(145deg,#568bff,#2859df);box-shadow:0 0 18px #3f77ef55}.ai-conclusion p{font-size:10px;color:#85a7e9;margin:0 0 5px}.ai-conclusion h3{font-size:15px;line-height:1.5;margin:0}.ai-conclusion em{font-style:normal;color:#ffd078}.evidence-row{display:grid;grid-template-columns:1fr 18px 1fr 18px 1fr;align-items:center;margin:12px 0}.evidence-row>div{text-align:center;background:#ffffff06;border:1px solid #ffffff0b;border-radius:9px;padding:8px}.evidence-row>i{text-align:center;color:#526889;font-style:normal}.evidence-row span,.evidence-row strong,.evidence-row small{display:block}.evidence-row span{font-size:9px;color:#7f91ad}.evidence-row strong{font-size:17px;margin:2px 0}.evidence-row small{font-size:8px;color:#607390}.evidence-row .result-evidence{border-color:#8167d53d;background:#6b50bf16}.ranking-title{display:flex;align-items:end;justify-content:space-between;border-top:1px solid #ffffff0c;padding-top:10px}.ranking-title h3{font-size:12px;margin:0}.ranking-title span{font-size:8px;color:#657895}.misconception-ranking{margin-top:3px}.rank-row{display:grid;grid-template-columns:26px 1fr 83px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #ffffff0a}.rank-row>b{width:25px;height:25px;display:grid;place-items:center;border-radius:7px;background:#ffb55e20;color:#ffbd6f;font-size:10px}.rank-copy strong,.rank-copy span{display:block}.rank-copy strong{font-size:11px}.rank-copy span{color:#70829e;font-size:8px;margin:2px 0 5px}.rank-bar{height:3px;background:#ffffff0b;border-radius:4px}.rank-bar i{display:block;height:100%;background:linear-gradient(90deg,#4d79e9,#ffae5d);border-radius:4px}.rank-values{text-align:right}.rank-values strong,.rank-values span{display:block}.rank-values strong{font-size:12px;color:#ffc277}.rank-values strong small{font-size:8px}.rank-values span{font-size:8px;color:#ff817b;margin-top:3px}.pulse-block{margin-top:auto;padding-top:10px}.pulse-heading{display:flex;justify-content:space-between;align-items:center}.pulse-heading h3{font-size:12px;margin:0}.pulse-heading span{font-size:8px;color:#677a99}.pulse-heading strong{font-size:10px;color:#64dab5}.pulse-chart{height:54px;margin-top:7px;display:flex;align-items:end;gap:5px;border-bottom:1px solid #2b3b55;background:repeating-linear-gradient(to top,transparent 0,transparent 17px,#ffffff08 18px)}.pulse-chart>i{flex:1;min-height:6px;border-radius:3px 3px 0 0;background:#4168b873;transition:height .7s}.pulse-chart>i.latest{background:#5f8cff;box-shadow:0 0 10px #4778ed88}.pulse-axis{display:flex;justify-content:space-between;color:#5d7091;font-size:7px;margin-top:4px}.readiness-summary{display:flex;gap:14px;align-items:center;margin:13px 0}.readiness-ring{--progress:280deg;width:82px;height:82px;border-radius:50%;padding:8px;background:conic-gradient(#5b87ff 0 var(--progress),#25334c var(--progress));flex:none}.readiness-ring>div{width:100%;height:100%;border-radius:50%;background:#101d33;display:grid;place-content:center;text-align:center}.readiness-ring strong{font-size:23px}.readiness-ring span{font-size:7px;color:#7789a8}.readiness-summary>div:last-child>strong{font-size:12px;color:#66dcb6}.readiness-summary p{font-size:9px;line-height:1.5;color:#7486a3;margin:4px 0 0}.matrix{display:grid;grid-template-columns:54px repeat(4,1fr);gap:5px}.matrix-head{text-align:center;font-size:8px;color:#6e819f;padding:3px}.matrix-label{font-size:10px;font-weight:700;display:grid;place-content:center}.matrix-label small{display:block;color:#60728f;font-size:7px}.cell{min-height:43px;border-radius:7px;display:grid;place-content:center;text-align:center;font-size:11px;font-weight:700}.cell small{display:block;font-size:7px}.c1{background:#673237!important;color:#ff928b}.c2{background:#58452f!important;color:#ffc474}.c3{background:#263e70!important;color:#9cbdff}.c4{background:#315fc0!important;color:#fff}.matrix-panel footer{display:flex;align-items:center;justify-content:flex-end;gap:4px;color:#617492;font-size:7px;margin-top:8px}.matrix-panel footer i{width:15px;height:6px;border-radius:2px}.question-list{margin-top:8px}.question-item{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:7px 0;border-bottom:1px solid #ffffff0b}.question-item>span{width:23px;height:23px;border-radius:7px;background:#375eaf45;color:#89adff;display:grid;place-items:center;font-size:9px}.question-item p{font-size:11px;line-height:1.45;margin:0;color:#d6dfef}.question-item small{font-size:8px;color:#6d7f9c}.streaming{font-size:9px;color:#5eddb3}.question-enter-active{transition:.4s}.question-enter-from{opacity:0;transform:translateY(-8px)}.panel-header.inverse .section-code{color:#a8c2ff}.generated{color:#76e4bd}.action-focus{margin:14px 0;padding:14px 15px;border-left:3px solid #f8bd68;background:#ffffff08;border-radius:0 10px 10px 0}.action-focus>span{font-size:9px;color:#f4bd6a}.action-focus h3{font-size:18px;line-height:1.45;margin:5px 0}.action-focus p{font-size:8px;color:#8396b7;margin:0}.action-steps{list-style:none;margin:0;padding:0}.action-steps li{display:grid;grid-template-columns:42px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid #ffffff12}.action-steps li>span{height:39px;border-radius:9px;background:#ffffff0c;color:#8eb0ff;display:grid;place-content:center;text-align:center;font-size:11px;font-weight:700}.action-steps li>span small{display:block;font-size:7px;color:#657ba2}.action-steps strong{font-size:12px}.action-steps p{font-size:9px;line-height:1.45;color:#91a0b9;margin:3px 0}.action-steps em{font-style:normal;font-size:8px;color:#c8b0ff;background:#7558c72c;border-radius:6px;padding:3px 5px}.teacher-prompt{margin-top:12px;padding:10px 12px;background:#f5bd6814;border:1px solid #f5bd682c;border-radius:9px}.teacher-prompt span{font-size:8px;color:#f5c475}.teacher-prompt p{font-size:11px;line-height:1.5;margin:3px 0 0}.generate-button{width:100%;height:38px;margin-top:11px;border:1px solid #7098ec;background:linear-gradient(90deg,#3968d2,#6a55c9);color:#fff;border-radius:9px;font-size:11px;font-weight:700}.action-panel>footer{text-align:center;color:#657897;font-size:8px;margin-top:8px}@keyframes signal{0%,100%{box-shadow:0 0 0 0 #4ce6b355}50%{box-shadow:0 0 0 5px #4ce6b300}}
-@media(max-width:1180px){.cockpit-header{grid-template-columns:1fr auto}.scope-controls{display:none}.kpi-strip article{grid-template-columns:34px 1fr}.kpi-strip em{display:none}.cockpit-grid{grid-template-columns:1.2fr .9fr .9fr}.cockpit-panel{padding:14px}.action-focus h3{font-size:16px}}
-@media(max-height:780px){.cockpit-header{height:64px}.cockpit-main{height:calc(100vh - 64px);padding:10px 16px;gap:9px}.kpi-strip{height:74px;gap:8px}.kpi-strip article{padding:8px 11px}.kpi-strip strong{font-size:22px}.cockpit-grid{gap:9px}.cockpit-panel{padding:12px 15px}.ai-conclusion{margin-top:8px;padding:9px}.evidence-row{margin:7px 0}.rank-row{padding:5px 0}.pulse-block{padding-top:5px}.pulse-chart{height:42px}.readiness-summary{margin:8px 0}.cell{min-height:36px}.action-focus{margin:8px 0;padding:9px 12px}.action-focus h3{font-size:15px}.action-steps li{padding:7px 0}.teacher-prompt{margin-top:7px;padding:7px 10px}.generate-button{height:32px;margin-top:7px}}
-@media(max-width:900px){.cockpit-header{padding:0 14px}.header-status .clock{display:none}.product-brand h1{font-size:17px}.cockpit-main{padding:10px}.kpi-strip{grid-template-columns:repeat(5,minmax(150px,1fr));overflow:hidden}.cockpit-grid{grid-template-columns:1fr 1fr;grid-template-areas:"fusion action" "fusion action"}.matrix-panel,.voice-panel{display:none}}
-.cockpit h1,.cockpit h2,.cockpit h3,.cockpit strong{color:#eef4ff}.product-brand h1{font-size:22px;color:#f4f7ff}.panel-header h2{font-size:18px;color:#eef4ff}.kpi-strip p{font-size:12px}.kpi-strip strong{font-size:27px;color:#f3f7ff}.ai-conclusion p{font-size:11px}.ai-conclusion h3{font-size:16px;color:#f1f5ff}.evidence-row span{font-size:10px}.evidence-row strong{font-size:19px}.ranking-title h3,.pulse-heading h3{font-size:13px;color:#eaf1ff}.rank-copy strong{font-size:12px;color:#e8eef9}.rank-copy span{font-size:9px}.question-item p{font-size:12px}.question-item small{font-size:9px}.action-focus h3{font-size:19px;color:#fff}.action-steps strong{font-size:13px;color:#f2f5ff}.action-steps p{font-size:10px}.teacher-prompt p{font-size:12px;color:#f2f5ff}
-.live-event-bar{height:38px;flex:none;display:grid;grid-template-columns:128px 1fr auto;align-items:center;gap:14px;padding:0 15px;border:1px solid #2c705f;background:linear-gradient(90deg,#10382f,#122c3d 60%,#14233b);border-radius:10px;overflow:hidden}.live-event-bar>strong{font-size:13px;color:#65e2b8}.live-event-bar>strong i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ce6b3;margin-right:8px;animation:signal 1.5s infinite}.live-event-bar p{font-size:13px;color:#dce8f7;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.live-event-bar>span{font-size:12px;color:#7f94b2}.live-event-bar.paused{filter:saturate(.25);opacity:.75}.ticker-enter-active,.ticker-leave-active{transition:.24s}.ticker-enter-from{opacity:0;transform:translateY(12px)}.ticker-leave-to{opacity:0;transform:translateY(-12px)}.changing-value{display:inline-block;animation:valuePop .48s ease}.pulse-chart{position:relative;overflow:hidden}.scan-line{position:absolute;z-index:3;top:0;bottom:0;width:2px;background:#80a7ff;box-shadow:0 0 12px #6e9aff;animation:scan 2.8s linear infinite}.pulse-chart>i.latest{animation:barPop .48s ease}.product-brand p,.scope-controls label>span,.live-switch,.clock span,.kpi-strip strong small,.kpi-strip em,.section-code,.confidence,.matrix-note,.generated,.ai-conclusion p,.evidence-row span,.evidence-row small,.ranking-title span,.rank-row>b,.rank-copy span,.rank-values strong small,.rank-values span,.pulse-heading span,.pulse-axis,.readiness-ring span,.readiness-summary p,.matrix-head,.matrix-label small,.cell small,.matrix-panel footer,.question-item>span,.question-item small,.streaming,.action-focus>span,.action-focus p,.action-steps li>span,.action-steps li>span small,.action-steps p,.action-steps em,.teacher-prompt span,.action-panel>footer{font-size:12px}.ai-conclusion p{font-size:13px}.evidence-row strong{font-size:20px}.rank-copy strong{font-size:13px}.rank-values strong{font-size:14px}.pulse-heading strong{font-size:13px}.readiness-ring{width:96px;height:96px}.readiness-summary>div:last-child>strong{font-size:14px}.matrix-label{font-size:13px}.cell{font-size:15px;min-height:48px}.question-item>span{width:28px;height:28px}.question-item p{font-size:14px}.action-focus p{font-size:12px}.action-steps li{grid-template-columns:48px 1fr}.action-steps li>span{height:46px}.action-steps strong{font-size:14px}.action-steps p{font-size:12px}.action-steps em{display:inline-block;font-size:12px}.teacher-prompt p{font-size:13px}.generate-button{font-size:13px}.action-panel>footer{font-size:12px}@keyframes valuePop{0%{opacity:.35;transform:translateY(6px) scale(.94)}60%{color:#74f0c2;transform:translateY(-1px) scale(1.05)}100%{opacity:1;transform:none}}@keyframes scan{from{left:-3%}to{left:103%}}@keyframes barPop{0%{transform:scaleY(.25);transform-origin:bottom}100%{transform:scaleY(1);transform-origin:bottom}}
-</style>
+<style scoped src="../styles/teacher-workspace.css"></style>

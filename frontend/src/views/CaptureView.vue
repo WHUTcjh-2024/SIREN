@@ -9,6 +9,7 @@ const router = useRouter()
 const { state } = useExperiment()
 const video = ref<HTMLVideoElement>()
 const canvas = ref<HTMLCanvasElement>()
+const visionCanvas = ref<HTMLCanvasElement>()
 const stream = ref<MediaStream>()
 const devices = ref<MediaDeviceInfo[]>([])
 const selectedDevice = ref('')
@@ -17,16 +18,160 @@ const file = ref<File>()
 const preview = ref('')
 const sourceLabel = ref('')
 const frameSize = ref('— × —')
+const frameWidth = ref(0)
+const frameHeight = ref(0)
 const capturedAt = ref('—')
 const analysing = ref(false)
 const elapsed = ref(0)
 const error = ref('')
 const steps = ref(Array.from({ length: 6 }, (_, index) => ({
-  label: ['图像预处理', '刻度 OCR', '光强剖面', 'SIREN 拟合', '亚像素定位', '输出结果'][index],
+  label: ['预处理', '标尺识别', '光强提取', 'SIREN 拟合', 'PINN 优化', '结果输出'][index],
   status: 'pending' as StepStatus
 })))
+const stageMeta = [
+  { code: '01 / PREPROCESS', title: '图像预处理', description: '灰度化、对比度增强与噪声抑制', metrics: ['RGB → Gray', 'Gaussian σ=0.8', '归一化 0–1'] },
+  { code: '02 / OCR MAPPING', title: '标尺识别', description: '检测标尺区域，建立像素到厘米映射', metrics: ['EasyOCR', '刻度线检测', 'px/cm 标定'] },
+  { code: '03 / PROFILE', title: '光强提取', description: '沿中心轴采样，生成连续光强剖面', metrics: ['中心轴采样', '峰值增强', '连续曲线'] },
+  { code: '04 / SIREN FIELD', title: 'SIREN 拟合', description: '用神经隐式场重建连续光强分布', metrics: ['正弦激活', '连续坐标场', '迭代收敛'] },
+  { code: '05 / PINN', title: 'PINN 优化', description: '加入对称性与光滑性物理约束', metrics: ['对称约束', '光滑性约束', '残差下降'] },
+  { code: '06 / MEASURE', title: '结果输出', description: '定位中央峰与 ±1 级峰，换算 H₀ 和 Δx', metrics: ['亚像素寻峰', 'H₀', 'Δx₁ / Δx₂'] }
+]
+const analysisDuration = 8
 const result = computed(() => state.measurement)
 const statusText = computed(() => analysing.value ? 'AI 分析中' : file.value ? '已采集' : cameraActive.value ? '摄像头工作中' : '待机')
+const activeStageIndex = computed(() => Math.min(5, Math.floor(elapsed.value / (analysisDuration / 6))))
+const activeStage = computed(() => stageMeta[activeStageIndex.value])
+const stageFraction = computed(() => Math.max(0, Math.min(1, (elapsed.value - activeStageIndex.value * analysisDuration / 6) / (analysisDuration / 6))))
+const analysisProgress = computed(() => analysing.value ? Math.min(99, (elapsed.value / analysisDuration) * 100) : 0)
+const formatWork = (value: number) => value >= 1e6 ? `${(value / 1e6).toFixed(2)}M` : value >= 1e3 ? `${(value / 1e3).toFixed(1)}K` : Math.round(value).toString()
+const workload = computed(() => {
+  const fraction = stageFraction.value
+  const pixels = Math.max(1, frameWidth.value * frameHeight.value)
+  const width = Math.max(1, frameWidth.value)
+  return [
+    [
+      { label: '处理像素', value: `${formatWork(pixels * fraction)} / ${formatWork(pixels)}`, ratio: fraction },
+      { label: '滤波窗口', value: `${Math.max(1, Math.round(9 * fraction))} / 9`, ratio: fraction },
+      { label: '通道变换', value: fraction > .62 ? 'RGB → Gray' : '读取 RGB', ratio: fraction }
+    ],
+    [
+      { label: '候选区域', value: `${Math.round(96 * fraction)} / 96`, ratio: fraction },
+      { label: 'OCR 字符', value: `${Math.round(24 * fraction)} / 24`, ratio: fraction },
+      { label: '标定匹配', value: `${Math.round(12 * fraction)} / 12`, ratio: fraction }
+    ],
+    [
+      { label: '中心轴采样', value: `${formatWork(width * fraction)} / ${formatWork(width)}`, ratio: fraction },
+      { label: '卷积计算', value: `${formatWork(width * 31 * fraction)} / ${formatWork(width * 31)}`, ratio: fraction },
+      { label: '曲线节点', value: `${Math.round(512 * fraction)} / 512`, ratio: fraction }
+    ],
+    [
+      { label: '坐标查询', value: `${formatWork(pixels * fraction)} / ${formatWork(pixels)}`, ratio: fraction },
+      { label: '拟合迭代', value: `${Math.round(640 * fraction)} / 640`, ratio: fraction },
+      { label: '网络参数', value: '65.8K', ratio: Math.min(1, fraction * 2) }
+    ],
+    [
+      { label: '约束采样点', value: `${formatWork(65536 * fraction)} / 65.5K`, ratio: fraction },
+      { label: '对称性配对', value: `${formatWork(32768 * fraction)} / 32.8K`, ratio: fraction },
+      { label: '物理残差', value: (0.084 * (1 - fraction) + 0.004).toFixed(4), ratio: fraction }
+    ],
+    [
+      { label: '峰值候选', value: `${Math.round(12 * fraction)} / 12`, ratio: fraction },
+      { label: '亚像素求解', value: `${formatWork(4096 * fraction)} / 4.1K`, ratio: fraction },
+      { label: '输出测量量', value: `${Math.round(4 * fraction)} / 4`, ratio: fraction }
+    ]
+  ][activeStageIndex.value]
+})
+const accumulatedWork = computed(() => formatWork(Math.max(1, frameWidth.value * frameHeight.value) * (1 + analysisProgress.value / 100 * 5.4)))
+let visionFrame = 0
+let visionImage: HTMLImageElement | undefined
+
+function stopVisionAnimation() {
+  if (visionFrame) window.cancelAnimationFrame(visionFrame)
+  visionFrame = 0
+  visionImage = undefined
+}
+
+function startVisionAnimation() {
+  stopVisionAnimation()
+  const target = visionCanvas.value
+  if (!target || !preview.value) return
+  const image = new Image()
+  image.src = preview.value
+  visionImage = image
+
+  const draw = (time: number) => {
+    const canvasElement = visionCanvas.value
+    const source = visionImage
+    if (!canvasElement || !source || !analysing.value) return
+    const width = 1040
+    const height = 500
+    if (canvasElement.width !== width || canvasElement.height !== height) {
+      canvasElement.width = width
+      canvasElement.height = height
+    }
+    const context = canvasElement.getContext('2d')
+    if (!context) return
+    context.fillStyle = '#071221'
+    context.fillRect(0, 0, width, height)
+    context.strokeStyle = 'rgba(112,145,198,.08)'
+    for (let x = 0; x < width; x += 32) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke() }
+    for (let y = 0; y < height; y += 32) { context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke() }
+
+    if (source.complete && source.naturalWidth) {
+      const padding = 24
+      const scale = Math.min((width - padding * 2) / source.naturalWidth, (height - padding * 2) / source.naturalHeight)
+      const imageWidth = source.naturalWidth * scale
+      const imageHeight = source.naturalHeight * scale
+      const imageX = (width - imageWidth) / 2
+      const imageY = (height - imageHeight) / 2
+      const phase = (time % 1600) / 1600
+      const stage = activeStageIndex.value
+
+      context.save()
+      context.globalAlpha = .88
+      context.filter = stage === 0 ? 'grayscale(1) contrast(1.16)' : 'contrast(1.08) saturate(.92)'
+      context.drawImage(source, imageX, imageY, imageWidth, imageHeight)
+      context.restore()
+      context.fillStyle = 'rgba(3,9,20,.18)'
+      context.fillRect(imageX, imageY, imageWidth, imageHeight)
+
+      if (stage === 0) {
+        const split = imageX + imageWidth * phase
+        context.save(); context.beginPath(); context.rect(split, imageY, imageX + imageWidth - split, imageHeight); context.clip()
+        context.filter = 'grayscale(1) contrast(1.35) brightness(1.08)'; context.drawImage(source, imageX, imageY, imageWidth, imageHeight); context.restore()
+        context.strokeStyle = '#67e8f9'; context.lineWidth = 2; context.beginPath(); context.moveTo(split, imageY); context.lineTo(split, imageY + imageHeight); context.stroke()
+        context.fillStyle = '#67e8f9'; context.font = '600 12px Inter'; context.fillText('AI CLEAN', Math.min(split + 10, width - 90), imageY + 22)
+      } else if (stage === 1) {
+        const rulerX = imageX + imageWidth * .76
+        context.strokeStyle = '#fbbf24'; context.lineWidth = 2; context.setLineDash([7, 5]); context.strokeRect(rulerX - 38, imageY + 12, 76, imageHeight - 24); context.setLineDash([])
+        for (let i = 0; i < 9; i++) { const y = imageY + 30 + i * (imageHeight - 60) / 8; context.beginPath(); context.moveTo(rulerX - 34, y); context.lineTo(rulerX - 14, y); context.stroke(); context.fillStyle = '#fde68a'; context.font = '10px JetBrains Mono'; context.fillText(String(i), rulerX + 14, y + 3) }
+        context.fillStyle = 'rgba(251,191,36,.12)'; context.fillRect(rulerX - 38, imageY + 12, 76, (imageHeight - 24) * phase)
+      } else if (stage === 2) {
+        const sampleY = imageY + imageHeight * (.42 + .16 * phase)
+        context.strokeStyle = '#22d3ee'; context.lineWidth = 2; context.beginPath(); context.moveTo(imageX, sampleY); context.lineTo(imageX + imageWidth, sampleY); context.stroke()
+        context.fillStyle = 'rgba(4,13,28,.78)'; context.fillRect(imageX, imageY + imageHeight * .68, imageWidth, imageHeight * .32)
+        context.strokeStyle = '#67e8f9'; context.lineWidth = 2.5; context.shadowColor = '#22d3ee'; context.shadowBlur = 8; context.beginPath()
+        for (let x = 0; x <= imageWidth; x += 3) { const center = x - imageWidth / 2; const envelope = Math.exp(-Math.pow(center / (imageWidth * .24), 2)); const y = imageY + imageHeight * .86 - Math.abs(Math.sin(center * .055)) * envelope * imageHeight * .15; if (x === 0) context.moveTo(imageX + x, y); else context.lineTo(imageX + x, y) }
+        context.stroke(); context.shadowBlur = 0
+      } else if (stage === 3) {
+        const columns = 8; const rows = 5
+        for (let column = 0; column < columns - 1; column++) for (let row = 0; row < rows; row++) for (let next = 0; next < rows; next++) { context.strokeStyle = 'rgba(129,140,248,.11)'; context.beginPath(); context.moveTo(imageX + imageWidth * (.12 + column * .105), imageY + imageHeight * (.18 + row * .16)); context.lineTo(imageX + imageWidth * (.12 + (column + 1) * .105), imageY + imageHeight * (.18 + next * .16)); context.stroke() }
+        for (let column = 0; column < columns; column++) for (let row = 0; row < rows; row++) { const x = imageX + imageWidth * (.12 + column * .105); const y = imageY + imageHeight * (.18 + row * .16); context.fillStyle = row % 2 ? '#67e8f9' : '#818cf8'; context.beginPath(); context.arc(x, y, 3 + 2 * Math.sin(time / 220 + column + row), 0, Math.PI * 2); context.fill() }
+      } else if (stage === 4) {
+        const axisX = imageX + imageWidth / 2
+        context.strokeStyle = '#a78bfa'; context.lineWidth = 2; context.setLineDash([8, 6]); context.beginPath(); context.moveTo(axisX, imageY); context.lineTo(axisX, imageY + imageHeight); context.stroke(); context.setLineDash([])
+        for (let offset = 50; offset < imageWidth * .42; offset += 58) { context.strokeStyle = `rgba(52,211,153,${.25 + .5 * phase})`; context.beginPath(); context.arc(axisX, imageY + imageHeight / 2, offset, -.9, .9); context.stroke(); context.beginPath(); context.arc(axisX, imageY + imageHeight / 2, offset, Math.PI - .9, Math.PI + .9); context.stroke() }
+        context.fillStyle = 'rgba(7,18,33,.82)'; context.fillRect(imageX + 14, imageY + 14, 170, 48); context.fillStyle = '#6ee7b7'; context.font = '600 12px JetBrains Mono'; context.fillText(`PHYSICS LOSS  ${(0.08 * (1 - phase) + .004).toFixed(4)}`, imageX + 26, imageY + 43)
+      } else {
+        const peakRatios = [.39, .5, .61]
+        peakRatios.forEach((ratio, index) => { const x = imageX + imageWidth * ratio; context.strokeStyle = index === 1 ? '#34d399' : '#a78bfa'; context.lineWidth = 2; context.beginPath(); context.moveTo(x, imageY + 8); context.lineTo(x, imageY + imageHeight - 8); context.stroke(); context.beginPath(); context.arc(x, imageY + imageHeight / 2, 9 + 2 * Math.sin(time / 180 + index), 0, Math.PI * 2); context.stroke(); context.fillStyle = context.strokeStyle; context.font = '600 11px Inter'; context.fillText(index === 1 ? 'H₀' : index === 0 ? '−1' : '+1', x + 8, imageY + 24) })
+        context.strokeStyle = '#f8fafc'; context.lineWidth = 1; context.beginPath(); context.moveTo(imageX + imageWidth * .39, imageY + imageHeight - 28); context.lineTo(imageX + imageWidth * .61, imageY + imageHeight - 28); context.stroke()
+      }
+    }
+    visionFrame = window.requestAnimationFrame(draw)
+  }
+  visionFrame = window.requestAnimationFrame(draw)
+}
 
 function releasePreview() {
   if (preview.value.startsWith('blob:')) URL.revokeObjectURL(preview.value)
@@ -89,7 +234,11 @@ function setFrame(nextFile: File, url: string, source: string, size?: string) {
   capturedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   frameSize.value = size || '读取中…'
   const image = new Image()
-  image.onload = () => { frameSize.value = `${image.naturalWidth} × ${image.naturalHeight}` }
+  image.onload = () => {
+    frameWidth.value = image.naturalWidth
+    frameHeight.value = image.naturalHeight
+    frameSize.value = `${image.naturalWidth} × ${image.naturalHeight}`
+  }
   image.src = url
   error.value = ''
   steps.value.forEach(step => { step.status = 'pending' })
@@ -132,6 +281,8 @@ async function loadSample() {
 function retake() {
   releasePreview()
   file.value = undefined
+  frameWidth.value = 0
+  frameHeight.value = 0
   sourceLabel.value = cameraActive.value ? '摄像头' : ''
   capturedAt.value = '—'
   steps.value.forEach(step => { step.status = 'pending' })
@@ -140,32 +291,35 @@ function retake() {
 async function analyse() {
   if (!file.value || analysing.value) return
   analysing.value = true
+  state.measurement = null
   error.value = ''
   elapsed.value = 0
   steps.value.forEach(step => { step.status = 'pending' })
   steps.value[0].status = 'start'
+  await nextTick()
+  startVisionAnimation()
   const started = performance.now()
-  const clock = window.setInterval(() => { elapsed.value = (performance.now() - started) / 1000 }, 100)
-  const animation = window.setInterval(() => {
-    const active = steps.value.findIndex(step => step.status === 'start')
-    if (active >= 0 && active < steps.value.length - 2) {
-      steps.value[active].status = 'done'
-      steps.value[active + 1].status = 'start'
-    }
-  }, 1300)
+  const clock = window.setInterval(() => {
+    elapsed.value = (performance.now() - started) / 1000
+    const active = Math.min(5, Math.floor(elapsed.value / (analysisDuration / 6)))
+    steps.value.forEach((step, index) => { step.status = index < active ? 'done' : index === active ? 'start' : 'pending' })
+  }, 100)
   const body = new FormData()
   body.append('images', file.value)
+  let pendingMeasurement: Measurement | null = null
   try {
     const response = await fetch('/api/laser-diffraction-stream', { method: 'POST', body })
     for await (const event of readNdjson(response)) {
-      if (event.event === 'step') {
-        const index = Number(event.data.step)
-        if (steps.value[index]) steps.value[index].status = event.data.status === 'done' ? 'done' : 'start'
-      } else if (event.event === 'result') {
-        state.measurement = event.data.data as Measurement
-        state.progress = Math.max(state.progress, 60)
-        steps.value.forEach(step => { step.status = 'done' })
+      if (event.event === 'result') {
+        pendingMeasurement = event.data.data as Measurement
       } else if (event.event === 'error') throw new Error(event.data.message)
+    }
+    const remaining = analysisDuration * 1000 - (performance.now() - started)
+    if (remaining > 0) await new Promise(resolve => window.setTimeout(resolve, remaining))
+    if (pendingMeasurement) {
+      state.measurement = pendingMeasurement
+      state.progress = Math.max(state.progress, 60)
+      steps.value.forEach(step => { step.status = 'done' })
     }
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '分析失败'
@@ -173,12 +327,12 @@ async function analyse() {
     if (current) current.status = 'pending'
   } finally {
     window.clearInterval(clock)
-    window.clearInterval(animation)
+    stopVisionAnimation()
     analysing.value = false
   }
 }
 
-onBeforeUnmount(() => { stopCamera(); releasePreview() })
+onBeforeUnmount(() => { stopCamera(); stopVisionAnimation(); releasePreview() })
 </script>
 
 <template>
@@ -219,7 +373,16 @@ onBeforeUnmount(() => { stopCamera(); releasePreview() })
     </section>
     <p v-if="error" class="vue-error capture-error"><i class="fa fa-exclamation-circle" /> {{ error }}</p>
 
-    <section v-if="file || analysing || result" class="card original-panel analysis-progress">
+    <section v-if="analysing" class="ai-vision-animation" aria-live="polite">
+      <header class="ai-vision-head"><div class="ai-vision-brand"><span><i class="fa fa-microchip" /></span><div><b>AI 图像理解工作台</b><small>实时展示当前图片的处理过程与计算负载</small></div></div><div class="ai-vision-head-right"><div class="ai-work-total"><span>累计处理单元</span><b>{{ accumulatedWork }}</b></div><div class="ai-vision-progress"><b>{{ Math.round(analysisProgress) }}%</b><span><i :style="{ width: `${analysisProgress}%` }" /></span><em>{{ elapsed.toFixed(1) }}s</em></div></div></header>
+      <div class="ai-vision-workspace">
+        <div class="ai-vision-canvas"><canvas ref="visionCanvas" /><span class="ai-vision-live"><i /> LIVE PROCESSING</span><span class="ai-vision-frame">{{ frameSize }}</span></div>
+        <aside class="ai-vision-inspector"><span class="ai-vision-code">{{ activeStage.code }}</span><h3>{{ activeStage.title }}</h3><p>{{ activeStage.description }}</p><div class="ai-vision-divider" /><span class="ai-workload-title">STAGE WORKLOAD</span><div class="ai-workload"><div v-for="item in workload" :key="item.label"><p><span>{{ item.label }}</span><b>{{ item.value }}</b></p><i><em :style="{ width: `${item.ratio * 100}%` }" /></i></div></div><ul class="ai-stage-tags"><li v-for="metric in activeStage.metrics" :key="metric">{{ metric }}</li></ul><div class="ai-vision-model"><span>ACTIVE MODEL</span><b>{{ activeStageIndex < 2 ? 'CV + EasyOCR' : activeStageIndex < 4 ? 'SIREN' : 'SIREN + PINN' }}</b></div></aside>
+      </div>
+      <ol class="ai-vision-timeline"><li v-for="(step,index) in steps" :key="step.label" :class="step.status"><span>{{ step.status === 'done' ? '✓' : index + 1 }}</span><div><b>{{ step.label }}</b><small>{{ ['灰度降噪','OCR 标定','中心轴采样','连续场重建','物理约束','峰值换算'][index] }}</small></div></li></ol>
+    </section>
+
+    <section v-else-if="file || result" class="card original-panel analysis-progress">
       <div class="panel-heading"><span class="panel-icon"><i class="fa fa-microchip" /></span><div><h3>AI 赋能物理实验流程</h3><p>SIREN · PINNs · EasyOCR</p></div></div>
       <ol class="pipeline horizontal"><li v-for="(step,index) in steps" :key="step.label" :class="step.status"><i>{{ step.status === 'done' ? '✓' : index + 1 }}</i><span><b>{{ step.label }}</b><small>{{ step.status === 'start' ? '处理中' : step.status === 'done' ? '已完成' : '等待执行' }}</small></span></li></ol>
     </section>

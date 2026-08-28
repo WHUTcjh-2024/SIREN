@@ -1,69 +1,11 @@
+"""Runtime configuration for the RAG assistant.
+
+The measurement pipeline is configured in `modules/high_precision.py`.  Keep
+this file focused on assistant settings so there is a single visible SIREN/PINN
+implementation in the codebase.
+"""
+
 import os
-
-SIREN_CONFIG = {
-    'input_dim': 1,
-    'hidden_dim': 256,
-    'num_layers': 4,
-    'freq_0': 30.0
-}
-
-TRAINING_CONFIG = {
-    'learning_rate': 1e-4,
-    'weight_decay': 1e-6,
-    'epochs': 500,
-    'early_stopping_patience': 80,
-    'early_stopping_min_delta': 1e-6,
-    'pinn_weight': 0.01,
-    'symmetry_weight': 0.005
-}
-
-NEWTON_CONFIG = {
-    'max_iterations': 100,
-    'tolerance': 1e-10,
-    'step_clamp': 0.15,
-    'n_scan': 5000
-}
-
-SUBPIXEL_CONFIG = {
-    'ruler_upscale_factor': 5.0,
-    'tick_search_window': 15,
-    'clahe_clip_limit': 3.0,
-    'clahe_tile_size': (8, 8)
-}
-
-EXPERIMENTAL_PARAMS = {
-    'wavelength': 632.8,
-    'distance_to_screen': 1000.0
-}
-
-CALIBRATION_CONFIG = {
-    'ruler_position': 'right',
-    'ocr_language': 'en',
-    'min_ocr_confidence': 0.3,
-    'target_marks_cm': [10, 20, 30],
-    'max_tick_match_dist_ratio': 0.05
-}
-
-COMPETITION_CONFIG = {
-    'system_name': '基于SIREN与PINNs的液体表面张力系数AI高精度测量系统',
-    'system_name_short': 'SIREN-PINNs智能系统',
-    'sidebar_title': 'SIREN-PINNs智能系统',
-    'track_label': 'AI + 物理实验',
-    'brand_line': 'SIREN · PINNs · 毛细波激光衍射',
-    'project_title': '基于SIREN与PINNs的液体表面张力系数AI高精度测量系统',
-    'project_subtitle': 'SIREN 神经隐式场 · PINNs 物理约束 · 亚像素条纹分析',
-    'operator_label': os.environ.get('LAB_OPERATOR', '实验工作台'),
-    'institution': os.environ.get('LAB_INSTITUTION', ''),
-    'year': '2026',
-    'innovation_points': [
-        'SIREN 连续光强场亚像素寻峰',
-        'PINNs 物理约束保证表面张力 σ 一致性',
-        '人机协同：预习—采集—计算全流程可追溯',
-    ],
-    # 兼容旧模板字段
-    'team_name': os.environ.get('LAB_OPERATOR', '实验工作台'),
-    'school_name': os.environ.get('LAB_INSTITUTION', ''),
-}
 
 RAG_CONFIG = {
     'enabled': True,
@@ -116,5 +58,3 @@ ZHIXING_LLM_CONFIG = {
     'max_history_chars': 8000,
     'history_assistant_max_chars': 600,
 }
-
-ZHIXING_LLM_CONFIG['system_prompt'] = ZHIXING_LLM_CONFIG['system_prompt_kb']

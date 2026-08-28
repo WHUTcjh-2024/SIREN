@@ -1,0 +1,336 @@
+{
+  "dataSource": "demo",
+  "organization": "高校物理实验教学试点工作区",
+  "teacherName": "王老师",
+  "courseName": "大学物理实验",
+  "experimentName": "液体表面张力系数测量",
+  "updatedAt": "2026-08-25 17:20",
+  "revision": 1,
+  "dataProfile": {
+    "studentCount": 83,
+    "experimentRecordCount": 243,
+    "quizAttemptCount": 83,
+    "dialogueEventCount": 140,
+    "measurementWindow": "2026-08-25 08:30–17:20"
+  },
+  "kpis": {
+    "activeStudents": 81,
+    "completionRate": 94,
+    "dataPassRate": 84,
+    "attentionCount": 5
+  },
+  "classes": [
+    {
+      "id": "telecom2401",
+      "name": "电信科 2401",
+      "course": "大学物理实验",
+      "students": 42,
+      "activeStudents": 41,
+      "completionRate": 95,
+      "dataPassRate": 83,
+      "averageError": 4.6,
+      "attentionCount": 2,
+      "trend": "up",
+      "nextSession": "周四 14:00 · 复盘课",
+      "activity": [
+        {
+          "time": "09:00",
+          "label": "预习测验",
+          "value": 29
+        },
+        {
+          "time": "10:30",
+          "label": "虚拟推演",
+          "value": 40
+        },
+        {
+          "time": "13:30",
+          "label": "图像采集",
+          "value": 56
+        },
+        {
+          "time": "15:00",
+          "label": "数据处理",
+          "value": 46
+        },
+        {
+          "time": "16:30",
+          "label": "复盘反馈",
+          "value": 24
+        }
+      ]
+    },
+    {
+      "id": "telecom2402",
+      "name": "电信科 2402",
+      "course": "大学物理实验",
+      "students": 41,
+      "activeStudents": 40,
+      "completionRate": 93,
+      "dataPassRate": 86,
+      "averageError": 4.8,
+      "attentionCount": 3,
+      "trend": "steady",
+      "nextSession": "周五 09:50 · 实验课",
+      "activity": [
+        {
+          "time": "09:00",
+          "label": "预习测验",
+          "value": 25
+        },
+        {
+          "time": "10:30",
+          "label": "虚拟推演",
+          "value": 36
+        },
+        {
+          "time": "13:30",
+          "label": "图像采集",
+          "value": 52
+        },
+        {
+          "time": "15:00",
+          "label": "数据处理",
+          "value": 45
+        },
+        {
+          "time": "16:30",
+          "label": "复盘反馈",
+          "value": 24
+        }
+      ]
+    }
+  ],
+  "alerts": [
+    {
+      "id": "alert-1",
+      "student": "学生 2402-07",
+      "className": "电信科 2402",
+      "type": "concept",
+      "level": "high",
+      "title": "测量链路理解断点",
+      "detail": "连续两次将条纹间距 Δx 与衍射角差 δ 混用，尚未建立观测量与模型项的对应关系。",
+      "evidence": "测验第 3 题错误 + 4 条“条纹到角度”相似对话 + 复测未通过",
+      "recommendation": "课前用装置图追问 Δx、L 与 δ 的关系，再安排一次定向复测。",
+      "status": "new"
+    },
+    {
+      "id": "alert-2",
+      "student": "学生 2401-12",
+      "className": "电信科 2401",
+      "type": "data",
+      "level": "high",
+      "title": "测量误差持续偏高",
+      "detail": "连续三组数据的相对误差均高于 8%，需要先排除屏距与标尺基准的系统偏差。",
+      "evidence": "3 条采集记录相对误差 8.61%–9.37% + 拟合残差连续偏高",
+      "recommendation": "核验屏距 L 与标尺基准，复测一组正负一级条纹并对照残差变化。",
+      "status": "new"
+    },
+    {
+      "id": "alert-3",
+      "student": "学生 2402-18",
+      "className": "电信科 2402",
+      "type": "progress",
+      "level": "medium",
+      "title": "实验流程停留在数据处理",
+      "detail": "已完成三组采集，但尚未提交拟合与误差分析，流程停留超过 28 分钟。",
+      "evidence": "任务状态停留 + 最近一次有效操作距今 28 分钟",
+      "recommendation": "先发送一步式拟合提示；若仍未提交，课后安排同伴互助。",
+      "status": "in_progress"
+    },
+    {
+      "id": "alert-4",
+      "student": "第 2 采集小组",
+      "className": "电信科 2401",
+      "type": "device",
+      "level": "medium",
+      "title": "采集条件需要复核",
+      "detail": "同一时段两名学习者的亮纹对比度低于班级中位数，存在环境光或准直条件扰动。",
+      "evidence": "图像质量评分 61–63 / 100 + 条纹对比度低于同班 P25",
+      "recommendation": "检查激光准直与环境光，保留本组原始图像并复测一组。",
+      "status": "new"
+    },
+    {
+      "id": "alert-5",
+      "student": "学生 2402-23",
+      "className": "电信科 2402",
+      "type": "concept",
+      "level": "low",
+      "title": "单位换算仍需巩固",
+      "detail": "主公式代入正确，但频率量纲换算仍有遗漏，建议在下次实验前完成微练习。",
+      "evidence": "预习测验 1 处单位题错误 + 2 条单位换算对话",
+      "recommendation": "推送 3 题微练习，在下次实验前自动校验。",
+      "status": "in_progress"
+    }
+  ],
+  "diagnoses": {
+    "all": {
+      "title": "条纹读取的关键，不是公式代入，而是“观测量如何进入物理模型”",
+      "summary": "两个教学班在条纹读取、衍射角换算与 Kelvin 公式之间出现连续性理解断点；优先通过装置图追问而非重复讲解公式。",
+      "recommendation": "在下一次课前插入 6 分钟“装置图—观测量—公式项”连线活动，并对高风险学习者发起定向复测。",
+      "confidenceLabel": "测验、采集、对话三源交叉验证",
+      "evidence": [
+        {
+          "source": "测验",
+          "label": "第 3 题错误率 33%",
+          "detail": "衍射角差 δ 的几何含义仍是高频理解断点"
+        },
+        {
+          "source": "实验记录",
+          "label": "32 条记录出现读数风险",
+          "detail": "异常集中在条纹间距与屏距换算环节"
+        },
+        {
+          "source": "AI 对话",
+          "label": "62 条相关追问",
+          "detail": "高频询问如何将 Δx 代入模型计算"
+        }
+      ]
+    },
+    "telecom2401": {
+      "title": "条纹读取的关键，不是公式代入，而是“观测量如何进入物理模型”",
+      "summary": "电信科 2401在条纹读取、衍射角换算与 Kelvin 公式之间出现连续性理解断点；优先通过装置图追问而非重复讲解公式。",
+      "recommendation": "在下一次课前插入 6 分钟“装置图—观测量—公式项”连线活动，并对高风险学习者发起定向复测。",
+      "confidenceLabel": "测验、采集、对话三源交叉验证",
+      "evidence": [
+        {
+          "source": "测验",
+          "label": "第 3 题错误率 26%",
+          "detail": "衍射角差 δ 的几何含义仍是高频理解断点"
+        },
+        {
+          "source": "实验记录",
+          "label": "15 条记录出现读数风险",
+          "detail": "异常集中在条纹间距与屏距换算环节"
+        },
+        {
+          "source": "AI 对话",
+          "label": "24 条相关追问",
+          "detail": "高频询问如何将 Δx 代入模型计算"
+        }
+      ]
+    },
+    "telecom2402": {
+      "title": "条纹读取的关键，不是公式代入，而是“观测量如何进入物理模型”",
+      "summary": "电信科 2402在条纹读取、衍射角换算与 Kelvin 公式之间出现连续性理解断点；优先通过装置图追问而非重复讲解公式。",
+      "recommendation": "在下一次课前插入 6 分钟“装置图—观测量—公式项”连线活动，并对高风险学习者发起定向复测。",
+      "confidenceLabel": "测验、采集、对话三源交叉验证",
+      "evidence": [
+        {
+          "source": "测验",
+          "label": "第 3 题错误率 39%",
+          "detail": "衍射角差 δ 的几何含义仍是高频理解断点"
+        },
+        {
+          "source": "实验记录",
+          "label": "17 条记录出现读数风险",
+          "detail": "异常集中在条纹间距与屏距换算环节"
+        },
+        {
+          "source": "AI 对话",
+          "label": "38 条相关追问",
+          "detail": "高频询问如何将 Δx 代入模型计算"
+        }
+      ]
+    }
+  },
+  "stages": [
+    {
+      "name": "预习校准",
+      "description": "概念测验与安全检查",
+      "metric": "81 / 83 已通过",
+      "state": "complete"
+    },
+    {
+      "name": "虚拟推演",
+      "description": "参数影响与测量预演",
+      "metric": "55 人已完成",
+      "state": "complete"
+    },
+    {
+      "name": "实物采集",
+      "description": "图像、仪器与观测量",
+      "metric": "243 条采集记录",
+      "state": "active"
+    },
+    {
+      "name": "AI 分析",
+      "description": "图像质检、计算与误差溯源",
+      "metric": "84% 数据合格",
+      "state": "active"
+    },
+    {
+      "name": "反馈复盘",
+      "description": "分层任务与学习闭环",
+      "metric": "5 项待处理",
+      "state": "pending"
+    }
+  ],
+  "integrations": [
+    {
+      "id": "instrument",
+      "icon": "⌁",
+      "title": "仪器与采集数据",
+      "category": "实物实验",
+      "status": "ready",
+      "description": "接入实验图像、设备参数与采集时间，形成可追溯原始记录。",
+      "capability": "相机 / 传感器 / 导入文件"
+    },
+    {
+      "id": "simulation",
+      "icon": "◌",
+      "title": "虚拟仿真平台",
+      "category": "课前与复盘",
+      "status": "ready",
+      "description": "把虚拟推演结果与实物实验结果放入同一学习链路。",
+      "capability": "任务状态 / 参数 / 成绩回传"
+    },
+    {
+      "id": "lms",
+      "icon": "▣",
+      "title": "教务与实验管理系统",
+      "category": "教学管理",
+      "status": "pending",
+      "description": "同步班级、学习者与实验任务，避免教师重复建班与导出。",
+      "capability": "班级名册 / 任务 / 成绩单"
+    },
+    {
+      "id": "ai",
+      "icon": "✦",
+      "title": "AI 助教与知识库",
+      "category": "教学诊断",
+      "status": "connected",
+      "description": "归纳高频困惑、生成追问建议，并保留判断的来源证据。",
+      "capability": "对话聚类 / 证据链 / 干预建议"
+    }
+  ],
+  "activity": [
+    {
+      "time": "09:00",
+      "label": "预习测验",
+      "value": 54
+    },
+    {
+      "time": "10:30",
+      "label": "虚拟推演",
+      "value": 76
+    },
+    {
+      "time": "13:30",
+      "label": "图像采集",
+      "value": 108
+    },
+    {
+      "time": "15:00",
+      "label": "数据处理",
+      "value": 91
+    },
+    {
+      "time": "16:30",
+      "label": "复盘反馈",
+      "value": 48
+    }
+  ],
+  "interventions": [],
+  "auditTrail": []
+}

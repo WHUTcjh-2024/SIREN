@@ -4,7 +4,6 @@ numpy>=1.24.0
 scipy>=1.11.0
 scikit-image>=0.21.0
 matplotlib>=3.7.0
-plotly>=5.15.0
 
 # Computer vision and OCR
 opencv-python>=4.8.0

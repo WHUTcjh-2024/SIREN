@@ -80,7 +80,7 @@ onMounted(() => void hydrate().catch(() => undefined))
       </div></div>
     </aside>
 
-    <div class="app-main" :class="{ 'app-main--home': active('home') }">
+    <div class="app-main" :class="{ 'app-main--home': active('home'), 'app-main--scrollable': !active('home') }">
       <header class="app-topbar">
         <div class="app-topbar-greeting"><b>{{ pageTitle }}</b><span>{{ pageSubtitle }}</span></div>
         <div class="app-topbar-actions">

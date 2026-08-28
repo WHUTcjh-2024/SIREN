@@ -29,6 +29,7 @@ class Settings:
     mimo_base_url: str
     mimo_model: str
     max_upload_bytes: int
+    teacher_access_code: str
 
     @property
     def output_dir(self) -> Path:
@@ -37,6 +38,14 @@ class Settings:
     @property
     def session_dir(self) -> Path:
         return ROOT_DIR / "data" / "experiment_sessions"
+
+    @property
+    def teacher_workspace_seed_file(self) -> Path:
+        return ROOT_DIR / "data" / "teacher_workspace_seed.json"
+
+    @property
+    def teacher_workspace_file(self) -> Path:
+        return ROOT_DIR / "data" / "teacher_workspace.json"
 
 
 @lru_cache
@@ -55,4 +64,5 @@ def get_settings() -> Settings:
         mimo_base_url=os.getenv("MIMO_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"),
         mimo_model=os.getenv("MIMO_MODEL", "mimo-v2.5"),
         max_upload_bytes=int(os.getenv("SIREN_MAX_UPLOAD_BYTES", str(16 * 1024 * 1024))),
+        teacher_access_code=os.getenv("TEACHER_ACCESS_CODE", "").strip(),
     )
