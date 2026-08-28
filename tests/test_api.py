@@ -53,6 +53,16 @@ def test_client_cannot_choose_experiment_session_id():
     assert response.status_code == 422
 
 
+def test_invalid_experiment_cookie_is_replaced_with_server_generated_id():
+    cookie_client = TestClient(app)
+    cookie_client.cookies.set("exp_sid", "malicious; Path=/")
+    response = cookie_client.post("/api/experiment-state", json={"state": {"progress": 1}})
+    assert response.status_code == 200
+    cookie = response.cookies.get("exp_sid")
+    assert cookie is not None
+    assert cookie != "malicious; Path=/"
+
+
 def test_request_body_limit_rejects_oversized_content_length():
     response = client.post(
         "/api/experiment-state",
